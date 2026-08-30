@@ -83,7 +83,7 @@ def tgju_history(tgju_id: str, days: int = 14) -> List[float]:
 
 # ---------------- Binance ----------------
 
-def binance_klines(symbol: str, interval: str = "1h", limit: int = 168) -> List[float]:
+def binance_klines(symbol: str, interval: str = "15m", limit: int = 96) -> List[float]:
     """کندل‌های اخیر — close prices، قدیمی→جدید."""
     def fetch():
         try:
@@ -170,3 +170,81 @@ def get_banner_data(code: str) -> Optional[dict]:
         }
 
     return None
+
+
+# ---------------- Local minute history (self-recorded) ----------------
+import json as _json
+import os as _os
+
+HIST_DIR = "hist"
+TTL_MIN = 60  # نگه‌داشتن ۶۰ نقطه‌ی اخیر
+
+
+def _hist_path(key: str) -> str:
+    _os.makedirs(HIST_DIR, exist_ok=True)
+    safe = re.sub(r"[^a-zA-Z0-9_-]", "_", key)
+    return _os.path.join(HIST_DIR, f"{safe}.json")
+
+
+def record_snapshot(code: str, tgju_id: str = None, binance_sym: str = None):
+    """قیمت لحظه‌ای را در تاریخچه‌ی محلی ثبت می‌کند — هر بار که بنر خواسته شه."""
+    import time as _t
+    path = _hist_path(f"local_{code}")
+    try:
+        price = None
+        if tgju_id:
+            p, _, _ = tgju_quote(tgju_id)
+            price = p // 10 if p else None  # تومان
+        elif binance_sym:
+            try:
+                price = float(_get(f"https://api.binance.com/api/v3/ticker/price?symbol={binance_sym}").json()["price"])
+            except Exception:
+                price = None
+        if not price:
+            return
+        now = int(_t.time())
+        data = []
+        if _os.path.exists(path):
+            try:
+                data = _json.load(open(path))
+            except Exception:
+                data = []
+        data.append([now, price])
+        # حذف نقاط قدیمی‌تر از ۶۰ نقطه یا ۲۴ ساعت
+        data = [x for x in data if now - x[0] < 86400][-60:]
+        _json.dump(data, open(path, "w"))
+    except Exception as e:
+        log.warning("record_snapshot %s: %s", code, e)
+
+
+def local_history(code: str) -> list:
+    """تاریخچه‌ی محلی ثبت‌شده (may be short)."""
+    path = _hist_path(f"local_{code}")
+    try:
+        return _json.load(open(path))
+    except Exception:
+        return []
+
+
+def smart_history(code: str, tgju_id: str = None, binance_sym: str = None) -> Tuple[list, str]:
+    """
+    هوشمندانه‌ترین تاریخچه:
+    - اگر تاریخچه‌ی محلی ≥ ۱۰ نقطه → همون (برچسب: 'X دقیقه اخیر')
+    - وگرنه تاریخچه‌ی رسمی (TGJU روزانه / Binance ساعتی)
+    خروجی: (مقادیر، برچسب)
+    """
+    local = local_history(code)
+    if len(local) >= 10:
+        span_min = round((local[-1][0] - local[0][0]) / 60)
+        label = f"روند {span_min} دقیقه اخیر (زنده)"
+        return [x[1] for x in local], label
+    # fallback رسمی
+    if tgju_id:
+        hist = tgju_history(tgju_id)
+        if hist:
+            return [x / 10 for x in hist], "روند ۱۴ روز گذشته"
+    if binance_sym:
+        k = binance_klines(binance_sym)
+        if k:
+            return k, "روند ۲۴ ساعت گذشته"
+    return [], ""

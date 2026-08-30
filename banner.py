@@ -111,8 +111,9 @@ def _area_chart(history, w: int, h: int, up: bool) -> Image.Image:
     md.polygon(pts + [(w - 4, h), (4, h)], fill=255)
     img.paste(grad, (0, 0), mask)
 
-    # خط اصلی (ضخیم‌تر با چند pass)
-    d.line(pts, fill=line_color + (255,), width=4, joint="curve")
+    # خط اصلی — smooth و با سایه
+    d.line([(x+1, y+2) for x, y in pts], fill=(0,0,0,60), width=2, joint="curve")
+    d.line(pts, fill=line_color + (255,), width=3, joint="curve")
 
     # نقطه‌ی آخر با هاله
     ex, ey = pts[-1]
@@ -131,10 +132,33 @@ def _fmt(v) -> str:
     return s
 
 
+def _code_ids(code: str):
+    """(tgju_id، binance_symbol) برای کد."""
+    std = catalog.resolve(code)
+    if not std:
+        return None, None
+    if std in catalog.FIAT:
+        return catalog.FIAT[std][2], None
+    if std in catalog.GOLD:
+        return catalog.GOLD[std][1], None
+    if std in catalog.STABLE:
+        return catalog.STABLE[std][1], None
+    if std in catalog.CRYPTO:
+        return None, catalog.CRYPTO[std][1]
+    return None, None
+
+
 def render_banner(code: str) -> Optional[bytes]:
     data = datafeeds.get_banner_data(code)
     if not data or not data.get("price"):
         return None
+
+    tg_id, b_sym = _code_ids(code)
+    # ثبت snapshot زنده (برای تاریخچه‌ی دقیقه‌ای آینده)
+    if tg_id:
+        datafeeds.record_snapshot(catalog.resolve(code), tgju_id=tg_id)
+    elif b_sym:
+        datafeeds.record_snapshot(catalog.resolve(code), binance_sym=b_sym)
 
     price = data["price"]
     pct = data.get("change_pct")
