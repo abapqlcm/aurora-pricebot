@@ -13,7 +13,10 @@ from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 import prices
 import render
-from render import parse_input, calc_message, single_message, render_calc_card, render_single_card, iran_rows, crypto_rows
+import catalog
+import datafeeds
+import banner
+from render import parse_input, calc_message, render_calc_card, iran_rows, crypto_rows
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("bot")
@@ -72,8 +75,19 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     kind, data = parse_input(text)
 
     if kind == "single":
-        key = data
-        png = render_single_card(key)
+        key = catalog.resolve(data) or data
+        # بنر جدید حرفه‌ای (پس‌زمینه پرچم/لوگو + نمودار)
+        png = banner.render_banner(key)
+        if png:
+            d = datafeeds.get_banner_data(key)
+            emoji = ""
+            if d:
+                cc = catalog.asset_urls(key)[2]
+                emoji = catalog.FLAG_EMOJI.get(cc, "") if key in catalog.FIAT else ""
+            await send_card(update, png)
+            return
+        # fallback: کارت ساده
+        png = render.render_single_card(key)
         if png:
             await send_card(update, png)
             return
