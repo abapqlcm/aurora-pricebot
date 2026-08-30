@@ -187,15 +187,15 @@ def parse_input(text: str):
     ورودی کاربر را می‌فهمد:
     - "دلار" → ('single', 'dollar')
     - "125 دلار" / "دلار 125" → ('calc', ('dollar', 125))
-    - "100 دلار به تومان" → ('calc', ...)
+    - "12.5 دلار" / "0.5 بیت کوین" → اعشار هم قبوله
     خروجی: (نوع, داده)
     """
     t = text.strip().lower()
     t = re.sub(r"\s+", " ", t)
 
-    # عدد در ابتدا یا انتها
-    m_num_start = re.match(r"^(\d[\d,.]*)\s*(.+)$", t)
-    m_num_end = re.match(r"^(.+?)\s*(\d[\d,.]*)$", t)
+    # عدد در ابتدا یا انتها (اعشار هم پشتیبانی می‌شود)
+    m_num_start = re.match(r"^(\d+(?:[.,]\d+)?)\s*(.+)$", t)
+    m_num_end = re.match(r"^(.+?)\s*(\d+(?:[.,]\d+)?)$", t)
 
     for pattern, num_group, name_group in [
         (m_num_start, 1, 2),
@@ -227,11 +227,20 @@ def _resolve_name(name: str):
     # جستجوی دقیق
     if n in FA_TO_KEY:
         return FA_TO_KEY[n]
-    # حذف کلمات اضافه
-    for stop in ["به", "چند", "تومان", "چنده", "قیمت", "چنده؟", "؟", "چی"]:
+    # حذف کلمات اضافه (ولی "ریال" و "گرم" را نگه می‌داریم برای تشخیص)
+    for stop in ["به", "چند", "تومان", "چنده", "قیمت", "چنده؟", "؟", "چی", "دانه", "عدد", "یک"]:
         n = n.replace(f" {stop} ", " ").replace(stop, "").strip()
+    if not n:
+        return None
     if n in FA_TO_KEY:
         return FA_TO_KEY[n]
+    # "گرم" → طلا (مثل "2 گرم")
+    if n == "گرم" or n == "grams" or n == "gram":
+        return "gold_18"
+    # "ریال" → دلار (کاربر منظورش دلار آمریکا — ریال ایران نداریم به عنوان واحد معامله)
+    # نه، ریال = ۱۰ تومان — پس تقسیم بر ۱۰ می‌کنیم بعداً. فعلاً پشتیبانی نمی‌کنیم
+    if n == "ریال" or n == "ریال ایران":
+        return "rial"
     # جستجوی جزئی
     for k, v in FA_TO_KEY.items():
         if k in n or n in k:
@@ -242,6 +251,13 @@ def _resolve_name(name: str):
 def get_price_for(key: str):
     """قیمت یک ارز به تومان (ایرانی) یا دلار (کریپتو)."""
     iran = get_iran()
+    # ریال = تومان × ۱۰ → پس قیمت دلار به ریال = dollar×۱۰
+    if key == "rial":
+        # قیمت دلار به ریال — کاربر «1000 ریال» می‌گه یعنی ۱۰۰ ریال دلار
+        d = iran.get("dollar")
+        if d:
+            return ("rial_usd", d * 10)  # قیمت دلار به ریال
+        return (None, None)
     if key in iran:
         return ("toman", iran[key])
     crypto = get_crypto(symbol=key)
@@ -262,6 +278,12 @@ def calc_message(key: str, amount: float) -> Optional[str]:
             f"🧮 *محاسبه*\n\n"
             f"{_fa_num(amount)} {name} = *{_fa_num(int(total))} تومان*\n\n"
             f"قیمت واحد: {_fa_num(price)} تومان"
+        )
+    if unit == "rial_usd":
+        return (
+            f"🧮 *محاسبه*\n\n"
+            f"{_fa_num(amount)} دلار = *{_fa_num(int(total))} ریال*\n\n"
+            f"قیمت واحد: {_fa_num(int(price))} ریال"
         )
     return (
         f"🧮 *محاسبه*\n\n"
@@ -294,6 +316,12 @@ def render_calc_card(key: str, amount: float) -> bytes:
             ("قیمت واحد", f"{_fa_num(price)} تومان", None),
         ]
         return render_price_card(rows, title="محاسبه", subtitle="تبدیل به تومان")
+    if unit == "rial_usd":
+        rows = [
+            (f"{_fa_num(amount)} دلار", f"{_fa_num(int(total))} ریال", None),
+            ("قیمت واحد", f"{_fa_num(int(price))} ریال", None),
+        ]
+        return render_price_card(rows, title="محاسبه", subtitle="تبدیل به ریال")
     rows = [
         (f"{_fa_num(amount)} {name}", f"${_fa_num(total)}", None),
         ("قیمت واحد", f"${_fa_num(price)}", None),
