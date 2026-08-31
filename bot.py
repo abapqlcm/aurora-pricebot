@@ -47,7 +47,6 @@ async def on_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     dt = (time.time() - t0) * 1000
     await update.message.reply_text(f"⚡ Ping: {dt:.0f}ms")
 
-
 async def _prefetch(ctx: ContextTypes.DEFAULT_TYPE, keys: list):
     """دیتای ارزهای محبوب رو از قبل بگیره تا جواب بعدی فوری باشه."""
     import asyncio
@@ -67,6 +66,11 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     
     text = update.message.text.strip()
     log.info(f"input: {text}")
+    
+    # پینگ بدون اسلش هم کار کنه
+    if text.lower() in ("ping", "پینگ", "پنگ"):
+        await on_ping(update, ctx)
+        return
     
     try:
         # پارس ورودی
