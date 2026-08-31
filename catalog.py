@@ -14,29 +14,33 @@ FLAG_EMOJI = {
     "iq": "🇮🇶", "ir": "🇮🇷",
 }
 
-# ارزهای فیات بازار ایران (TGJU) — کد → (نام فارسی، کد کشور پرچم، tgju_id)
+# ارزهای فیات بازار ایران — کد → (نام فارسی، کد کشور پرچم، tgju_id، بایننس FX)
+# قیمت لایو = تتر تومانی (والکس) × نرخ جهانی ارز/دلار (بایننس)
 FIAT = {
-    "dollar":   ("دلار آمریکا",        "us", "price_dollar_rl"),
-    "euro":     ("یورو",               "eu", "price_eur"),
-    "pound":    ("پوند انگلیس",        "gb", "price_gbp"),
-    "aed":      ("درهم امارات",        "ae", "price_aed"),
-    "try":      ("لیر ترکیه",          "tr", "price_try"),
-    "chf":      ("فرانک سوئیس",        "ch", "price_chf"),
-    "cad":      ("دلار کانادا",        "ca", "price_cad"),
-    "aud":      ("دلار استرالیا",      "au", "price_aud"),
-    "cny":      ("یوان چین",           "cn", "price_cny"),
-    "jpy":      ("ین ژاپن",            "jp", "price_jpy"),
-    "rub":      ("روبل روسیه",         "ru", "price_rub"),
-    "kwd":      ("دینار کویت",         "kw", "price_kwd"),
-    "sar":      ("ریال عربستان",       "sa", "price_sar"),
-    "omr":      ("ریال عمان",          "om", "price_omr"),
-    "qar":      ("ریال قطر",           "qa", "price_qar"),
-    "bhd":      ("دینار بحرین",        "bh", "price_bhd"),
-    "inr":      ("روپیه هند",          "in", "price_inr"),
-    "pkr":      ("روپیه پاکستان",      "pk", "price_pkr"),
-    "myr":      ("رینگیت مالزی",       "my", "price_myr"),
-    "iqd":      ("دینار عراق",         "iq", "price_iqd"),
+    "dollar":   ("دلار آمریکا",        "us", "price_dollar_rl", None),   # = تتر
+    "euro":     ("یورو",               "eu", "price_eur",        "EURUSDT"),
+    "pound":    ("پوند انگلیس",        "gb", "price_gbp",        "GBPUSDT"),
+    "aed":      ("درهم امارات",        "ae", "price_aed",        None),   # بایننس نداره → دلار×3.6725 ثابت
+    "try":      ("لیر ترکیه",          "tr", "price_try",        "TRYUSDT"),
+    "chf":      ("فرانک سوئیس",        "ch", "price_chf",        None),
+    "cad":      ("دلار کانادا",        "ca", "price_cad",        None),
+    "aud":      ("دلار استرالیا",      "au", "price_aud",        None),
+    "cny":      ("یوان چین",           "cn", "price_cny",        None),
+    "jpy":      ("ین ژاپن",            "jp", "price_jpy",        None),
+    "rub":      ("روبل روسیه",         "ru", "price_rub",        None),
+    "kwd":      ("دینار کویت",         "kw", "price_kwd",        None),
+    "sar":      ("ریال عربستان",       "sa", "price_sar",        None),
+    "omr":      ("ریال عمان",          "om", "price_omr",        None),
+    "qar":      ("ریال قطر",           "qa", "price_qar",        None),
+    "bhd":      ("دینار بحرین",        "bh", "price_bhd",        None),
+    "inr":      ("روپیه هند",          "in", "price_inr",        None),
+    "pkr":      ("روپیه پاکستان",      "pk", "price_pkr",        None),
+    "myr":      ("رینگیت مالزی",       "my", "price_myr",        None),
+    "iqd":      ("دینار عراق",         "iq", "price_iqd",        None),
 }
+
+# نرخ‌های ثابت جهانی برای ارزهای بدون جفت بایننس (تقریبی — fallback TGJU بهتره)
+# در عمل: اگه بایننس جفت نداشت → مستقیم TGJU (قیمت ریالی روزانه)
 
 # طلا و سکه (TGJU) — کد → (نام فارسی، tgju_id، آیکون)
 GOLD = {

@@ -107,6 +107,55 @@ def binance_24h_change(symbol: str) -> Optional[float]:
     return _cached(("c", symbol), fetch)
 
 
+# ---------------- Wallex (بازار آزاد ایران — لایو) ----------------
+
+def _wallex_markets() -> dict:
+    """نمادهای والکس — کش ۲۰ ثانیه‌ای (لایو ولی نه هر ثانیه)."""
+    def fetch():
+        r = _get("https://api.wallex.ir/v1/markets", timeout=12)
+        return r.json().get("result", {}).get("symbols", {})
+    return _cached("wallex", fetch)
+
+
+def wallex_quote(symbol: str) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    """(آخرین قیمت تومانی، تغییر ۲۴h٪، بالاترین ۲۴h) از والکس."""
+    syms = _wallex_markets()
+    rec = syms.get(symbol)
+    if not rec:
+        return None, None, None
+    st = rec.get("stats", {})
+    def _f(x):
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+    last = _f(st.get("lastPrice"))
+    if last is None:
+        last = _f(st.get("bidPrice")) or _f(st.get("askPrice"))
+    ch = _f(st.get("24h_ch"))
+    return last, ch, _f(st.get("24h_highPrice"))
+
+
+def usdt_toman() -> float:
+    """قیمت لحظه‌ای تتر تومانی (بازار آزاد = نرخ واقعی دلار)."""
+    last, _, _ = wallex_quote("USDTTMN")
+    return last or 0.0
+
+
+# ---------------- Binance FX (نرخ جهانی ارزها) ----------------
+
+def binance_fx_rate(usd_pair: str) -> Optional[float]:
+    """نرخ دلاری ارز (مثل EURUSDT) از بایننس."""
+    def fetch():
+        try:
+            r = _get(f"https://api.binance.com/api/v3/ticker/24hr?symbol={usd_pair}")
+            return float(r.json()["lastPrice"])
+        except Exception as e:
+            log.warning("binance fx %s: %s", usd_pair, e)
+            return None
+    return _cached(("fx", usd_pair), fetch)
+
+
 # ---------------- واحد یکپارچه ----------------
 
 def get_banner_data(code: str) -> Optional[dict]:
@@ -118,15 +167,34 @@ def get_banner_data(code: str) -> Optional[dict]:
     if not code:
         return None
     if code in catalog.FIAT:
-        name, _, tg_id = catalog.FIAT[code]
-        p, dp, d = tgju_quote(tg_id)
-        hist_rial = tgju_history(tg_id)
-        # تبدیل ریال→تومان برای یکدستی
-        hist = [x / 10 for x in hist_rial]
+        name, _, tg_id, fx_sym = catalog.FIAT[code]
+        # نرخ جهانی ارز نسبت به دلار از بایننس + تتر تومانی لایو → قیمت تومانی زنده
+        usdt_t = usdt_toman()
+        price = None
+        pct = None
+        if code == "dollar":
+            # دلار = تتر تومانی (بازار آزاد)
+            price = round(usdt_t) if usdt_t else None
+            _, pct, _ = wallex_quote("USDTTMN")
+        elif usdt_t and fx_sym:
+            rate = binance_fx_rate(fx_sym)
+            if rate:
+                price = round(usdt_t * rate)
+        if price is None:
+            # fallback: TGJU (ممکنه کند باشه)
+            p, dp, d = tgju_quote(tg_id)
+            hist_rial = tgju_history(tg_id)
+            hist = [x / 10 for x in hist_rial]
+            return {
+                "name": name, "price": (p // 10 if p else None), "change_pct": dp,
+                "change_abs": (d // 10 if d else None),
+                "history": hist, "unit": "تومان", "source": "TGJU",
+            }
         return {
-            "name": name, "price": p // 10, "change_pct": dp,
-            "change_abs": (d // 10 if d else None),
-            "history": hist, "unit": "تومان", "source": "TGJU",
+            "name": name, "price": price, "change_pct": pct,
+            "change_abs": None,
+            "history": [x / 10 for x in tgju_history(tg_id)],
+            "unit": "تومان", "source": "Wallex+Binance (لایو)",
         }
 
     if code in catalog.GOLD:
@@ -142,11 +210,20 @@ def get_banner_data(code: str) -> Optional[dict]:
 
     if code in catalog.STABLE:
         name, tg_id, _ = catalog.STABLE[code]
+        # تتر داخلی = USDTTMN والکس (لایو)
+        last, ch, _ = wallex_quote("USDTTMN")
+        if last:
+            return {
+                "name": name, "price": round(last), "change_pct": ch,
+                "change_abs": None,
+                "history": [x / 10 for x in tgju_history(tg_id)],
+                "unit": "تومان", "source": "Wallex (لایو)",
+            }
+        # fallback
         p, dp, d = tgju_quote(tg_id)
-        hist_rial = tgju_history(tg_id)
-        hist = [x / 10 for x in hist_rial]
+        hist = [x / 10 for x in tgju_history(tg_id)]
         return {
-            "name": name, "price": p // 10, "change_pct": dp,
+            "name": name, "price": (p // 10 if p else None), "change_pct": dp,
             "change_abs": (d // 10 if d else None),
             "history": hist, "unit": "تومان", "source": "TGJU",
         }

@@ -176,6 +176,21 @@ KNOWN_CODES = set(FA_TO_KEY.values())
 
 def render_price_card(rows, title="", subtitle=""):
     """کارت ساده‌ی چندردیفه — برای «همه» و «کریپتو»."""
+    def _rtl_f(s):
+        """RTL: با libraqm خام، بدون libraqm reshape+bidi."""
+        try:
+            from PIL import features
+            if features.check("raqm"):
+                return str(s)
+        except Exception:
+            pass
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+            return get_display(arabic_reshaper.reshape(str(s)))
+        except Exception:
+            return str(s)
+
     import io
     from PIL import Image, ImageDraw, ImageFont
     W = 720
@@ -188,14 +203,14 @@ def render_price_card(rows, title="", subtitle=""):
     f_title = ImageFont.truetype("fonts/Vazir-Bold.ttf", 40)
     f_row = ImageFont.truetype("fonts/Vazir-Medium.ttf", 26)
     f_sub = ImageFont.truetype("fonts/Vazir-Regular.ttf", 20)
-    d.text((W//2, 60), title, font=f_title, fill=(255,215,0), anchor="mm")
+    d.text((W//2, 60), _rtl_f(title), font=f_title, fill=(255,215,0), anchor="mm")
     if subtitle:
-        d.text((W//2, 105), subtitle, font=f_sub, fill=(150,150,160), anchor="mm")
+        d.text((W//2, 105), _rtl_f(subtitle), font=f_sub, fill=(150,150,160), anchor="mm")
     y = header_h
     for name, value, _ in rows:
         d.rounded_rectangle((20, y, W-20, y+row_h-10), radius=14, fill=(22,22,30))
-        d.text((W-36, y+(row_h-10)//2), name, font=f_row, fill=(240,240,245), anchor="rm")
-        d.text((36, y+(row_h-10)//2), value, font=f_row, fill=(255,215,0), anchor="lm")
+        d.text((W-36, y+(row_h-10)//2), _rtl_f(name), font=f_row, fill=(240,240,245), anchor="rm")
+        d.text((36, y+(row_h-10)//2), str(value), font=f_row, fill=(255,215,0), anchor="lm")
         y += row_h
     d.text((W//2, H-35), "⭐ AuroraPriceBot · @iprez", font=f_sub, fill=(150,150,160), anchor="mm")
     buf = io.BytesIO()

@@ -31,9 +31,29 @@ def _fa(text: str) -> str:
     return str(text)
 
 
+_RAQM = None  # کش وضعیت libraqm
+
 def _rtl(s: str) -> str:
-    """متن فارسی — فقط خام برگردون (PIL خود‌کار رندر می‌کنه)."""
-    return s
+    """متن فارسی برای PIL:
+    - با libraqm: خام بده (raqm خودش RTL + اتصال حروف رو انجام می‌ده)
+    - بدون libraqm (Railway): reshape + bidi
+    """
+    global _RAQM
+    if _RAQM is None:
+        try:
+            from PIL import features
+            _RAQM = features.check("raqm")
+        except Exception:
+            _RAQM = False
+    s = str(s)
+    if _RAQM:
+        return s
+    try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+        return get_display(arabic_reshaper.reshape(s))
+    except Exception:
+        return s
 
 
 def _font(size: int, weight: str = "m") -> ImageFont.FreeTypeFont:
@@ -259,9 +279,12 @@ def render_banner(code: str) -> Optional[bytes]:
         chart = _area_chart(hist, cw - 56, chart_h, up)
         card.paste(chart, (28, y), chart)
         y += chart_h + 20
-        # کپشن نمودار
+        # کپشن نمودار + تاریخ آخرین آپدیت قیمت
         f_cap = _font(22, "r")
-        cap = "روند ۱۴ روز گذشته" if unit == "تومان" else "روند ۷ روز گذشته (ساعتی)"
+        if unit == "تومان":
+            cap = "روند ۱۴ روز گذشته · آخرین بروزرسانی: " + data.get("updated", "")
+        else:
+            cap = "روند ۷ روز گذشته (ساعتی) · زنده"
         cd.text((cw // 2, y), _rtl(_fa(cap)), font=f_cap, fill=GRAY, anchor="mm")
         y += 40
 
