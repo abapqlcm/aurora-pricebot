@@ -106,21 +106,17 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 total = amount * price
                 if unit == "تومان":
                     cap = (
-                        f"⭐️ 1 {d['name']} = *{render.fmt_num(price)} تومان*\n"
-                        f"━━━━━━━━━━━━━\n"
-                        f"💱 *{render.fmt_num(render._nice(amount))} {d['name']}* = "
-                        f"*{render.fmt_num(int(total))} تومان*\n"
+                        f"⭐️ 1 {d['name']} = {render.fmt_num(price)} تومان\n"
+                        f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = {render.fmt_num(int(total))} تومان\n"
                         f"🕐 بروزرسانی: {render._now_fa()}"
                     )
                 else:
                     cap = (
-                        f"⭐️ 1 {d['name']} = *${render.fmt_num(price)}*\n"
-                        f"━━━━━━━━━━━━━\n"
-                        f"💱 *{render.fmt_num(render._nice(amount))} {d['name']}* = "
-                        f"*${render.fmt_num(round(total, 2))}*\n"
+                        f"⭐️ 1 {d['name']} = ${render.fmt_num(price)}\n"
+                        f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = ${render.fmt_num(round(total, 2))}\n"
                         f"🕐 بروزرسانی: {render._now_fa()}"
                     )
-                await update.message.reply_photo(png, caption=cap, parse_mode="Markdown")
+                await update.message.reply_photo(png, caption=cap)
             else:
                 await update.message.reply_text(f"❌ نتونستم قیمت {key} رو بگیرم.")
     

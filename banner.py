@@ -218,23 +218,7 @@ def _area_chart(history, w: int, h: int, up: bool, ohlcv=None) -> Image.Image:
     for r, a in [(14, 55), (9, 110), (4, 255)]:
         d.ellipse((ex - r, ey - r, ex + r, ey + r), fill=line_color + (a,))
 
-    # محور قیمت — برچسب‌ها داخل کادر، متن کوچک با پس‌زمینه‌ی تیره
-    try:
-        f_ax = _font(15, "m")
-        for frac in (0.04, 0.5, 0.96):
-            val = mx - rng * frac
-            gy = y_of(val)
-            gy = max(PAD_T + 8, min(h - PAD_B - 8, gy))
-            txt = _fmt(val)
-            tw = d.textlength(txt, font=f_ax)
-            bx = w - tw - 10
-            d.rounded_rectangle((bx - 4, gy - 10, w - 4, gy + 10), radius=5,
-                                fill=(10, 10, 16, 170), outline=(255, 255, 255, 24), width=1)
-            d.text((bx + (w - 4 - bx - tw) / 2, gy), txt, font=f_ax,
-                   fill=(225, 225, 235, 235), anchor="lm")
-    except Exception:
-        pass
-
+        # محور قیمت — حذف شد (خواست کاربر: اعداد سمت راست چارت نباشه)
     return img
 
 
