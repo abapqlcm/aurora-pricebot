@@ -203,7 +203,7 @@ def render_banner(code: str) -> Optional[bytes]:
     # --- عنوان + پرچم ---
     f_title = _font(44, "b")
     title = data["name"]
-    cd.text((cw - 36, y), _fa(title), font=f_title, fill=WHITE, anchor="ra", direction='rtl')
+    cd.text((cw - 36, y), _fa(title), font=f_title, fill=WHITE, anchor="ra")
 
     # پرچم/آیکون دایره‌ای
     icon_img = _fetch_bg_image(code)
@@ -226,10 +226,10 @@ def render_banner(code: str) -> Optional[bytes]:
     f_price = _font(88, "b")
     unit = data["unit"]
     price_txt = f"{_fmt(price)} {unit if unit=='دلار' else ''}".strip()
-    cd.text((cw // 2, y + 50), _fa(price_txt), font=f_price, fill=GOLD_BRIGHT, anchor="mm", direction='rtl')
+    cd.text((cw // 2, y + 50), _fa(price_txt), font=f_price, fill=GOLD_BRIGHT, anchor="mm")
     if unit == "تومان":
         f_unit = _font(30, "r")
-        cd.text((cw // 2, y + 118), _fa("تومان"), font=f_unit, fill=GRAY, anchor="mm", direction='rtl')
+        cd.text((cw // 2, y + 118), _fa("تومان"), font=f_unit, fill=GRAY, anchor="mm")
     y += 160
 
     # --- باکس تغییرات ---
@@ -244,7 +244,7 @@ def render_banner(code: str) -> Optional[bytes]:
         bx2 = cw // 2 + tw / 2 + 28
         cd.rounded_rectangle((bx1, y, bx2, y + 56), radius=28, fill=color + (46,),
                              outline=color + (220,), width=2)
-        cd.text((cw // 2, y + 28), _fa(label), font=f_chg, fill=color, anchor="mm", direction='rtl')
+        cd.text((cw // 2, y + 28), _fa(label), font=f_chg, fill=color, anchor="mm")
         y += 84
 
     # --- نمودار ---
@@ -257,7 +257,7 @@ def render_banner(code: str) -> Optional[bytes]:
         # کپشن نمودار
         f_cap = _font(22, "r")
         cap = "روند ۱۴ روز گذشته" if unit == "تومان" else "روند ۷ روز گذشته (ساعتی)"
-        cd.text((cw // 2, y), _fa(cap), font=f_cap, fill=GRAY, anchor="mm", direction='rtl')
+        cd.text((cw // 2, y), _fa(cap), font=f_cap, fill=GRAY, anchor="mm")
         y += 40
 
     # ---- ترکیب نهایی ----
@@ -268,7 +268,7 @@ def render_banner(code: str) -> Optional[bytes]:
     od = ImageDraw.Draw(out)
     f_wm = _font(24, "b")
     od.text((W // 2, H - 36), _fa("⭐ AuroraPriceBot · @iprez"),
-            font=f_wm, fill=(230, 230, 235, 200), anchor="mm", direction='rtl')
+            font=f_wm, fill=(230, 230, 235, 200), anchor="mm")
 
     buf = io.BytesIO()
     out.convert("RGB").save(buf, "PNG", optimize=True)
