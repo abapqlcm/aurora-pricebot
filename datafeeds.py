@@ -266,10 +266,27 @@ def get_banner_data(code: str) -> Optional[dict]:
         # تتر داخلی = USDTTMN والکس (لایو)
         last, ch, _ = wallex_quote("USDTTMN")
         if last:
+            # از Wallex 24h high/low بگیر
+            try:
+                r = _get("https://api.wallex.ir/v1/markets?symbol=USDTTMN", timeout=8)
+                stats = r.json()['result']['symbols']['USDTTMN']['stats']
+                high_24 = float(stats.get('24h_highPrice', last))
+                low_24 = float(stats.get('24h_lowPrice', last))
+                # fake ohlcv برای chart (3 نقطه: low, current, high)
+                ohlcv = [
+                    [low_24, high_24, low_24, last],
+                    [last, high_24, last, last],
+                    [last, high_24, low_24, last]
+                ]
+            except:
+                high_24 = low_24 = last
+                ohlcv = []
+            
             return {
                 "name": name, "price": round(last), "change_pct": ch,
                 "change_abs": None,
                 "history": [x / 10 for x in tgju_history(tg_id)],
+                "ohlcv": ohlcv,
                 "unit": "تومان", "source": "Wallex (لایو)",
             }
         # fallback
