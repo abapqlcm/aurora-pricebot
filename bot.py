@@ -41,11 +41,18 @@ async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def on_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """دستور /ping — پینگ و زمان پاسخ."""
-    t0 = time.time()
-    msg = await update.message.reply_text("⚡ Pinging...")
-    dt = (time.time() - t0) * 1000
-    await msg.edit_text(f"⚡ Ping: {dt:.0f}ms")
+    """دستور /ping — پینگ خالص شبکه به تلگرام API."""
+    import asyncio
+    import requests
+    def _ping():
+        t0 = time.time()
+        requests.get("https://api.telegram.org", timeout=5)
+        return (time.time() - t0) * 1000
+    try:
+        dt = await asyncio.get_running_loop().run_in_executor(None, _ping)
+        await update.message.reply_text(f"⚡ Network Ping: {dt:.0f}ms")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ping failed: {e}")
 
 async def _prefetch(ctx: ContextTypes.DEFAULT_TYPE, keys: list):
     """دیتای ارزهای محبوب رو از قبل بگیره تا جواب بعدی فوری باشه."""
