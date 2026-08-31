@@ -57,15 +57,17 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     
     text = update.message.text.strip()
-    await update.message.chat.send_action("upload_photo")  # "uploading..."
     
     try:
         # پارس ورودی
         kind, data = render.parse_input(text)
         
         if kind is None:
-            # ورودی نامعلوم — خاموش بمون (چت نکن)
+            # ورودی نامعلوم — بدون جواب و بدون typing indicator
             return
+        
+        # فقط اگه ورودی معتبره: typing indicator + جواب
+        await update.message.chat.send_action("upload_photo")
         
         if kind == "single":
             # اسم ارز تک — بنر + کپشن زنده در یک پیام
