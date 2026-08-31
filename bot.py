@@ -19,6 +19,25 @@ log = logging.getLogger(__name__)
 TOKEN = os.getenv("BOT_TOKEN", "")
 
 
+async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """دستور /start."""
+    await update.message.reply_text(
+        "سلام! 👋\n\n"
+        "من **AuroraPriceBot** هستم — ربات قیمت لحظه‌ای ارزها و رمزارزها.\n\n"
+        "**چطوری استفاده کنم:**\n"
+        "• اسم ارز رو بنویس: `دلار`، `یورو`، `طلا`، `بیت‌کوین`\n"
+        "• یا عدد + ارز: `125 دلار`، `2 گرم طلا`\n"
+        "• من بنر قیمت تصویری برات می‌فرستم\n\n"
+        "**ارزهای موجود:**\n"
+        "💵 **دلار، یورو، پوند، درهم، لیر، فرانک، دینار...**\n"
+        "🥇 **طلا (۱۸ و ۲۴)، سکه امامی، بهار، نیم، ربع، گرمی**\n"
+        "💎 **تتر (USDT)**\n"
+        "🪙 **بیت‌کوین، اتریوم، سولانا، تون، دوج، شیبا و ۲۴ کریپتوی دیگر**\n\n"
+        "بیا شروع کن! 🚀",
+        parse_mode="Markdown"
+    )
+
+
 async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """کاربر متن فرستاد — پردازش و جواب."""
     if not update.message or not update.message.text:
@@ -34,7 +53,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if kind is None:
             # ورودی نامعلوم
             import catalog
-            all_names = list(catalog.FIAT_FA.keys()) + list(catalog.GOLD_FA.keys()) + list(catalog.STABLE_FA.keys()) + list(catalog.CRYPTO_FA.keys())
+            all_names = list(catalog.FIAT.keys()) + list(catalog.GOLD.keys()) + list(catalog.STABLE.keys()) + list(catalog.CRYPTO.keys())
             reply = f"🤔 متوجه نشدم.\n\nمثال‌های معتبر:\n• دلار، یورو، طلا، بیت‌کوین\n• ۱۲۵ دلار، ۲ گرم طلا\n• ۰.۰۱ بیت‌کوین"
             await update.message.reply_text(reply)
             return
@@ -92,8 +111,8 @@ def main():
     app = Application.builder().token(TOKEN).build()
     
     # Handlers
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-    app.add_handler(MessageHandler(filters.COMMAND, on_text))
+    app.add_handler(MessageHandler(filters.COMMAND, on_start))  # /start + /help و...
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))  # متن عادی
     app.add_error_handler(on_error)
     
     log.info("🚀 AuroraPriceBot v5 started (conversational)")

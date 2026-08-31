@@ -32,12 +32,8 @@ def _fa(text: str) -> str:
 
 
 def _rtl(s: str) -> str:
-    """متن فارسی RTL — از python-bidi برای صحیح‌سازی جهت."""
-    try:
-        from bidi.algorithm import get_display
-        return get_display(s)
-    except Exception:
-        return s
+    """متن فارسی — فقط خام برگردون (PIL خود‌کار رندر می‌کنه)."""
+    return s
 
 
 def _font(size: int, weight: str = "m") -> ImageFont.FreeTypeFont:
