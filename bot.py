@@ -100,8 +100,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                             f"⭐️ 1 {d['name']} = *{render.fmt_num(int(price))} تومان*\n"
                             f"*{pct:+.2f}%*\n"
                             f"\n📊 **محدوده ۲۴ ساعت:**\n"
-                            f"🔼 بالاترین: {render.fmt_num(int(high_24))} تومان\n"
-                            f"🔽 پایین‌ترین: {render.fmt_num(int(low_24))} تومان\n"
+                            f"> 🔼 بالاترین: {render.fmt_num(int(high_24))} تومان\n"
+                            f"> 🔽 پایین‌ترین: {render.fmt_num(int(low_24))} تومان\n"
                             f"\n🕐 بروزرسانی: {render._now_fa()}"
                         )
                     else:
@@ -110,8 +110,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                             f"⭐️ 1 {d['name']} = *${render.fmt_num(price)}*\n"
                             f"*{pct:+.2f}%*\n"
                             f"\n📊 **محدوده ۲۴ ساعت:**\n"
-                            f"🔼 بالاترین: ${render.fmt_num(high_24)}\n"
-                            f"🔽 پایین‌ترین: ${render.fmt_num(low_24)}\n"
+                            f"> 🔼 بالاترین: ${render.fmt_num(high_24)}\n"
+                            f"> 🔽 پایین‌ترین: ${render.fmt_num(low_24)}\n"
                             f"\n🕐 بروزرسانی: {render._now_fa()}"
                         )
                 await update.message.reply_photo(png, caption=cap, parse_mode="Markdown")
