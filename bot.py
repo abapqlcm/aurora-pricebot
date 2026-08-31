@@ -39,6 +39,18 @@ async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def _prefetch(ctx: ContextTypes.DEFAULT_TYPE, keys: list):
+    """دیتای ارزهای محبوب رو از قبل بگیره تا جواب بعدی فوری باشه."""
+    import asyncio
+    def _job():
+        for k in keys:
+            try:
+                datafeeds.get_banner_data(k)
+            except Exception:
+                pass
+    asyncio.get_running_loop().run_in_executor(None, _job)
+
+
 async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """کاربر متن فرستاد — پردازش و جواب."""
     if not update.message or not update.message.text:
@@ -60,13 +72,28 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return
         
         if kind == "single":
-            # اسم ارز تک — بنر
+            # اسم ارز تک — بنر + کپشن زنده در یک پیام
             key = data
+            d = datafeeds.get_banner_data(key)
             png = banner.render_banner(key)
-            if png:
-                await update.message.reply_photo(png)
+            if png and d:
+                unit = d.get("unit", "تومان")
+                price = d.get("price") or 0
+                if unit == "تومان":
+                    cap = (
+                        f"⭐️ 1 {d['name']} = *{render.fmt_num(price)} تومان*\n"
+                        f"🕐 بروزرسانی: {render._now_fa()}"
+                    )
+                else:
+                    cap = (
+                        f"⭐️ 1 {d['name']} = *${render.fmt_num(price)}*\n"
+                        f"🕐 بروزرسانی: {render._now_fa()}"
+                    )
+                await update.message.reply_photo(png, caption=cap, parse_mode="Markdown")
             else:
-                await update.message.reply_text(f"❌ نتونستم بنر {key} رو بسازم.")
+                await update.message.reply_text(f"❌ نتونستم قیمت {key} رو بگیرم.")
+            # دیتای بعدی از قبل آماده شه
+            await _prefetch(ctx, ["dollar", "BTC", "gold_18", "usdt", "euro"])
         
         elif kind == "calc":
             # محاسبه: amount × ارز — بنر + کپشن (همه در یک پیام)

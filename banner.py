@@ -56,11 +56,17 @@ def _rtl(s: str) -> str:
         return s
 
 
+_FONTS: dict = {}
+
 def _font(size: int, weight: str = "m") -> ImageFont.FreeTypeFont:
-    path = {"b": f"{FONT_DIR}/Vazir-Bold.ttf",
-            "m": f"{FONT_DIR}/Vazir-Medium.ttf",
-            "r": f"{FONT_DIR}/Vazir-Regular.ttf"}[weight]
-    return ImageFont.truetype(path, size)
+    """فونت با کش — دیگه هر بار truetype باز نمی‌شه (سرعت)."""
+    key = (size, weight)
+    if key not in _FONTS:
+        path = {"b": f"{FONT_DIR}/Vazir-Bold.ttf",
+                "m": f"{FONT_DIR}/Vazir-Medium.ttf",
+                "r": f"{FONT_DIR}/Vazir-Regular.ttf"}[weight]
+        _FONTS[key] = ImageFont.truetype(path, size)
+    return _FONTS[key]
 
 
 def _fetch_bg_image(code: str) -> Optional[Image.Image]:
@@ -107,83 +113,125 @@ def _blurred_bg(img: Image.Image) -> Image.Image:
     return Image.blend(img, overlay, 0.45)
 
 
+def _smooth(points, steps=None):
+    """Catmull-Rom spline — خط نرم و یکدست (بدون تیکه‌تیکه)."""
+    if len(points) < 3:
+        return points
+    pts = [(float(x), float(y)) for x, y in points]
+    out = []
+    n = len(pts)
+    steps = steps or max(8, int((pts[-1][0] - pts[0][0]) / 2))
+    for i in range(n - 1):
+        p0 = pts[max(0, i - 1)]
+        p1 = pts[i]
+        p2 = pts[min(n - 1, i + 1)]
+        p3 = pts[min(n - 1, i + 2)]
+        for t in [j / steps for j in range(steps)]:
+            t2, t3 = t * t, t * t * t
+            x = 0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t +
+                       (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+                       (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3)
+            y = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t +
+                       (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+                       (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3)
+            out.append((x, y))
+    out.append(pts[-1])
+    return out
+
+
 def _area_chart(history, w: int, h: int, up: bool, ohlcv=None) -> Image.Image:
-    """نمودار حرفه‌ای: کندل‌استیک + خط smooth + گرادیان + محور قیمت."""
+    """نمودار حرفه‌ای: خط smooth نوری + گرادیان + کندل‌های ظریف + محور قیمت داخل کادر."""
+    PAD_T, PAD_B, PAD_X = 14, 10, 6
     if len(history) < 2:
         history = (history + [history[0]]) if history else [0, 0]
     mn, mx = min(history), max(history)
-    rng = (mx - mn) or 1
+    if mx == mn:
+        mx = mn * 1.001 + 1
+    rng = mx - mn
     n = len(history)
     line_color = GREEN if up else RED
 
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
 
-    # شبکه‌ی افقی ظریف (۴ خط)
-    for i in range(1, 4):
-        gy = int(h * i / 4)
-        d.line([(0, gy), (w, gy)], fill=(255, 255, 255, 14), width=1)
+    plot_h = h - PAD_T - PAD_B
 
-    # گرادیان زیر نمودار (فقط خط)
+    def y_of(v):
+        return PAD_T + plot_h - (v - mn) / rng * plot_h
+
+    # شبکه‌ی افقی ظریف (۴ خط داخل کادر)
+    for i in range(1, 4):
+        gy = PAD_T + int(plot_h * i / 4)
+        d.line([(0, gy), (w, gy)], fill=(255, 255, 255, 16), width=1)
+
+    # نقاط اصلی
     pts = []
     for i, v in enumerate(history):
-        x = i / (n - 1) * (w - 8) + 4
-        y = h - 8 - (v - mn) / rng * (h - 20)
-        pts.append((x, y))
+        x = PAD_X + i / (n - 1) * (w - 2 * PAD_X)
+        pts.append((x, y_of(v)))
+
+    # گرادیان زیر خط (با ماسک smooth)
+    smooth = _smooth(pts)
     grad = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     gd = ImageDraw.Draw(grad)
     for yy in range(h):
-        alpha = max(0, int(110 * (1 - yy / h)))
+        alpha = max(0, int(100 * (1 - yy / h)))
         gd.line([(0, yy), (w, yy)], fill=(line_color[0], line_color[1], line_color[2], alpha))
     mask = Image.new("L", (w, h), 0)
     md = ImageDraw.Draw(mask)
-    md.polygon(pts + [(w - 4, h), (4, h)], fill=90)
+    poly = [(x, y) for x, y in smooth]
+    poly += [(w - PAD_X, h), (PAD_X, h)]
+    md.polygon(poly, fill=70)
     img.paste(grad, (0, 0), mask)
 
-    # کندل‌ها (اگر OHLC داریم و تعداد معقوله)
-    if ohlcv and 8 <= len(ohlcv) <= 96:
-        cw = max(2, min(7, (w - 8) // len(ohlcv) - 1))
-        step = (w - 8) / len(ohlcv)
-        # کمتر تعداد → کندل واقعی؛ زیاد → کندل باریک
+    # کندل‌های ظریف پشت خط (اگر OHLC داریم — نیمه‌شفاف و باریک)
+    if ohlcv and 8 <= len(ohlcv) <= 120:
         show = ohlcv if len(ohlcv) <= 60 else ohlcv[::2]
-        sstep = (w - 8) / len(show)
+        sstep = (w - 2 * PAD_X) / len(show)
+        cw = max(2, min(6, int(sstep * 0.55)))
         for i, (o, hi, lo, c) in enumerate(show):
-            x = int(i * sstep + sstep / 2 + 4)
-            up_c = c >= o
-            col = GREEN if up_c else RED
-            # فتیله
-            yh = h - 8 - (hi - mn) / rng * (h - 20)
-            yl = h - 8 - (lo - mn) / rng * (h - 20)
-            d.line([(x, yh), (x, yl)], fill=col + (150,), width=1)
-            # بدنه
-            yo = h - 8 - (o - mn) / rng * (h - 20)
-            yc = h - 8 - (c - mn) / rng * (h - 20)
-            t, b = min(yo, yc), max(yo, yc)
-            if b - t < 1.5:
-                b = t + 1.5
-            d.rounded_rectangle((x - cw // 2, t, x + cw // 2 + 1, b), radius=1, fill=col + (235,))
-    else:
-        # کندل نداریم → خط smooth
-        d.line([(x + 1, y + 2) for x, y in pts], fill=(0, 0, 0, 60), width=2, joint="curve")
-        d.line(pts, fill=line_color + (255,), width=3, joint="curve")
+            x = int(PAD_X + i * sstep + sstep / 2)
+            col = GREEN if c >= o else RED
+            yh = y_of(hi); yl = y_of(lo)
+            yh = max(PAD_T, min(h - PAD_B, yh))
+            yl = max(PAD_T, min(h - PAD_B, yl))
+            d.line([(x, yh), (x, yl)], fill=col + (80,), width=1)
+            yo, yc = y_of(o), y_of(c)
+            t, b = max(PAD_T, min(h - PAD_B, min(yo, yc))), max(PAD_T, min(h - PAD_B, max(yo, yc)))
+            if b - t < 1.2:
+                b = t + 1.2
+            d.rounded_rectangle((x - cw // 2, t, x + cw // 2 + 1, b), radius=1, fill=col + (110,))
 
-    # خط اصلی — سایه و نقطه‌ی درخشان آخر
-    d.line([(x + 1, y + 2) for x, y in pts], fill=(0, 0, 0, 60), width=2, joint="curve")
-    d.line(pts, fill=line_color + (255,), width=3, joint="curve")
-    ex, ey = pts[-1]
-    for r, a in [(16, 60), (10, 110), (5, 255)]:
+    # خط اصلی نرم + هاله‌ی نور (glow) — چند پاس با آلفا کم
+    glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    gd2 = ImageDraw.Draw(glow)
+    gd2.line(smooth, fill=line_color + (70,), width=9, joint="curve")
+    gd2.line(smooth, fill=line_color + (110,), width=5, joint="curve")
+    glow = glow.filter(ImageFilter.GaussianBlur(3))
+    img.alpha_composite(glow)
+    d.line(smooth, fill=(0, 0, 0, 60), width=2, joint="curve")
+    d.line(smooth, fill=line_color + (255,), width=3, joint="curve")
+
+    # نقطه‌ی درخشان آخر (داخل کادر)
+    ex, ey = smooth[-1]
+    ey = max(PAD_T, min(h - PAD_B, ey))
+    for r, a in [(14, 55), (9, 110), (4, 255)]:
         d.ellipse((ex - r, ey - r, ex + r, ey + r), fill=line_color + (a,))
 
-    # محور قیمت — ۳ برچسب (بالا/وسط/پایین)
+    # محور قیمت — برچسب‌ها داخل کادر، متن کوچک با پس‌زمینه‌ی تیره
     try:
-        f_ax = _font(16, "m")
-        for frac, va in [(0.06, "mm"), (0.5, "mm"), (0.94, "mm")]:
+        f_ax = _font(15, "m")
+        for frac in (0.04, 0.5, 0.96):
             val = mx - rng * frac
-            gy = h - 8 - (val - mn) / rng * (h - 20)
+            gy = y_of(val)
+            gy = max(PAD_T + 8, min(h - PAD_B - 8, gy))
             txt = _fmt(val)
-            d.text((w - 6, gy), txt, font=f_ax, fill=(210, 210, 220, 210),
-                   anchor="ra", stroke_width=2, stroke_fill=(10, 10, 14, 220))
-            d.line([(0, gy), (w, gy)], fill=(255, 255, 255, 18), width=1)
+            tw = d.textlength(txt, font=f_ax)
+            bx = w - tw - 10
+            d.rounded_rectangle((bx - 4, gy - 10, w - 4, gy + 10), radius=5,
+                                fill=(10, 10, 16, 170), outline=(255, 255, 255, 24), width=1)
+            d.text((bx + (w - 4 - bx - tw) / 2, gy), txt, font=f_ax,
+                   fill=(225, 225, 235, 235), anchor="lm")
     except Exception:
         pass
 

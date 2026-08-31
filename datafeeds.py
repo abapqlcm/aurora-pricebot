@@ -17,7 +17,7 @@ log = logging.getLogger("data")
 
 UA = {"User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
 _cache = {}
-CACHE_TTL = 0  # بدون cache — همیشه fetch کن
+CACHE_TTL = 15  # کش کوتاه برای سرعت (قیمت هنوز کاملاً زنده)
 
 
 def _get(url, timeout=12):
