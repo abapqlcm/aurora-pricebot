@@ -41,30 +41,46 @@ async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def on_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """دستور /ping — پینگ خالص شبکه (TCP به سرور تلگرام)."""
+    """دستور /ping — Real ping (TCP خالص) + Telegram ping (TLS+DNS)."""
     import asyncio
     import socket
+    import ssl
 
-    def _ping():
+    def _real_ping():
         # فقط زمان اتصال TCP (بدون DNS/TLS) — خالص‌ترین پینگ
         t0 = time.time()
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(5)
         try:
             s.connect(("149.154.167.220", 443))  # سرور تلگرام
-            dt = (time.time() - t0) * 1000
+            return (time.time() - t0) * 1000
         except Exception:
-            dt = None
+            return None
         finally:
             s.close()
-        return dt
+
+    def _telegram_ping():
+        # TLS handshake + DNS lookup
+        t0 = time.time()
+        ctx = ssl.create_default_context()
+        try:
+            with socket.create_connection(("api.telegram.org", 443), timeout=5) as raw:
+                with ctx.wrap_socket(raw, server_hostname="api.telegram.org") as s:
+                    return (time.time() - t0) * 1000
+        except Exception:
+            return None
 
     try:
-        dt = await asyncio.get_running_loop().run_in_executor(None, _ping)
-        if dt is not None:
-            await update.message.reply_text(f"⚡ Network Ping: {dt:.0f}ms")
-        else:
-            await update.message.reply_text("❌ Ping failed")
+        loop = asyncio.get_running_loop()
+        real, tg = await asyncio.gather(
+            loop.run_in_executor(None, _real_ping),
+            loop.run_in_executor(None, _telegram_ping)
+        )
+        msg = "⚡ Real ping: "
+        msg += f"{real:.0f}ms" if real is not None else "N/A"
+        msg += "\n\n⚡ Telegram ping: "
+        msg += f"{tg:.0f}ms" if tg is not None else "N/A"
+        await update.message.reply_text(msg)
     except Exception as e:
         await update.message.reply_text(f"❌ Ping failed: {e}")
 
