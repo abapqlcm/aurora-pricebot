@@ -204,9 +204,19 @@ def render_price_card(rows, title="", subtitle=""):
 
 
 def render_calc_card(key, amount):
-    """کارت محاسبه — از banner.render_banner استفاده می‌کنه (با محاسبه)."""
+    """کارت محاسبه — بنر اصلی + مقدار محاسبه‌شده."""
     import banner as _banner
-    # بنر اصلی + زیرنویس محاسبه
+    d = datafeeds.get_banner_data(key)
+    if not d or not d.get("price"):
+        return None
+    price = d["price"]
+    total = amount * price
+    unit = d["unit"]
+    name = d["name"]
+    if unit == "تومان":
+        caption = f"{fmt_num(amount)} {name} = {fmt_num(int(total))} تومان"
+    else:
+        caption = f"{fmt_num(amount)} {name} = ${fmt_num(total)}"
     png = _banner.render_banner(key)
     return png
 

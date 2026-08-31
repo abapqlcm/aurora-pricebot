@@ -58,7 +58,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             d = datafeeds.get_banner_data(k)
             if d and d.get("price"):
                 rows.append((name, f"{d['price']:,} تومان", None))
-        png = banner.render_price_card(rows, title="بازار ایران", subtitle="قیمت لحظه‌ای")
+        png = render.render_price_card(rows, title="بازار ایران", subtitle="قیمت لحظه‌ای")
         if png:
             await update.message.reply_photo(photo=png)
             return
@@ -71,7 +71,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             d = datafeeds.get_banner_data(k)
             if d and d.get("price"):
                 rows.append((name, f"${d['price']:,.2f}", None))
-        png = banner.render_price_card(rows[:12], title="رمزارزها", subtitle="دلاری")
+        png = render.render_price_card(rows[:12], title="رمزارزها", subtitle="دلاری")
         if png:
             await update.message.reply_photo(photo=png)
             return
@@ -93,7 +93,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if kind == "calc":
         key, amount = data
-        png = banner.render_calc_card(key, amount)
+        png = render.render_calc_card(key, amount)
         if png:
             await send_card(update, png)
             return
@@ -119,15 +119,29 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
 
 
-def main():
-    if not TOKEN:
-        print("❌ BOT_TOKEN ست نشده.")
-        raise SystemExit(1)
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-    app.add_handler(MessageHandler(filters.COMMAND, on_text))
-    log.info("AuroraPriceBot v5 started (conversational)")
-    app.run_polling()
+async def on_error(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """هر خطایی لاگ بشه + به کاربر بگم."""
+    err = ctx.error
+    log.error("handler error: %s", err)
+    if update and update.effective_message:
+        try:
+            await update.effective_message.reply_text(
+                "⚠️ یه خطای داخلی پیش اومد. دوباره تلاش کن یا اسم ارز رو دقیق‌تر بفرست.",
+            )
+        except Exception:
+            pass
+
+
+    def main():
+        if not TOKEN:
+            print("❌ BOT_TOKEN ست نشده.")
+            raise SystemExit(1)
+        app = Application.builder().token(TOKEN).build()
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+        app.add_handler(MessageHandler(filters.COMMAND, on_text))
+        app.add_error_handler(on_error)
+        log.info("AuroraPriceBot v5 started (conversational)")
+        app.run_polling()
 
 
 if __name__ == "__main__":
