@@ -79,15 +79,27 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             if png and d:
                 unit = d.get("unit", "تومان")
                 price = d.get("price") or 0
+                pct = d.get("change_pct") or 0
+                
                 if unit == "تومان":
                     cap = (
                         f"⭐️ 1 {d['name']} = *{render.fmt_num(price)} تومان*\n"
+                        f"*{pct:+.2f}%*\n"
                         f"🕐 بروزرسانی: {render._now_fa()}"
                     )
                 else:
+                    # کریپتو: قیمت USD + درصد + محدوده High/Low (24h)
+                    ohlcv = d.get("ohlcv", [])
+                    high_24 = max(x[2] for x in ohlcv) if ohlcv else price
+                    low_24 = min(x[3] for x in ohlcv) if ohlcv else price
+                    
                     cap = (
                         f"⭐️ 1 {d['name']} = *${render.fmt_num(price)}*\n"
-                        f"🕐 بروزرسانی: {render._now_fa()}"
+                        f"*{pct:+.2f}%*\n"
+                        f"\n📊 **محدوده ۲۴ ساعت:**\n"
+                        f"🔼 بالاترین: ${render.fmt_num(high_24)}\n"
+                        f"🔽 پایین‌ترین: ${render.fmt_num(low_24)}\n"
+                        f"\n🕐 بروزرسانی: {render._now_fa()}"
                     )
                 await update.message.reply_photo(png, caption=cap, parse_mode="Markdown")
             else:
