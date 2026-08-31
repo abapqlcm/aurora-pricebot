@@ -1,8 +1,7 @@
 """
-AuroraPriceBot v2 — ربات گفتگویی با کارت تصویری
-کاربر تایپ می‌کنه: «دلار» → کارت قشنگ قیمت
-کاربر تایپ می‌کنه: «125 دلار» → کارت محاسبه
-هیچ دستوری لازم نیست.
+AuroraPriceBot v5 — ربات گفتگویی کامل
+کاربر تایپ می‌کنه: «دلار»، «طلا»، «بیت کوین»، «125 دلار»، «2 گرم طلا»...
+ربات بنر تصویری حرفه‌ای می‌فرسته.
 """
 import os
 import logging
@@ -11,12 +10,10 @@ from telegram import Update
 from telegram.constants import ParseMode, ChatAction
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
-import prices
-import render
 import catalog
 import datafeeds
 import banner
-from render import parse_input, calc_message, render_calc_card, iran_rows, crypto_rows
+import render
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("bot")
@@ -26,26 +23,24 @@ TOKEN = os.environ.get("BOT_TOKEN", "")
 WELCOME = (
     "👋 سلام! خوش اومدی\n\n"
     "من قیمت لحظه‌ای همه‌چیز رو بلدم:\n\n"
-    "💵 دلار، یورو، پوند، درهم، لیر و ۴۰+ ارز دیگه\n"
+    "💵 دلار، یورو، پوند، درهم، لیر، دینار، فرانک و ۲۰+ ارز دیگه\n"
     "🥇 طلا، سکه امامی، بهار آزادی، نیم و ربع‌سکه\n"
     "🪙 تتر داخلی\n"
-    "🌐 بیت‌کوین، اتریوم و ۵۰۰+ رمزارز\n\n"
+    "🌐 بیت‌کوین، اتریوم و ۳۰+ رمزارز\n\n"
     "✍️ *چطوری؟*\n"
-    "فقط بنویس: `دلار`\n"
+    "فقط بنویس: `دلار` یا `طلا` یا `بیت کوین`\n"
     "یا بپرس: `125 دلار چند تومنه؟`\n"
     "یا: `2 گرم طلا`\n\n"
-    "همین! هیچ دستوری لازم نیست 😎"
+    "همین! هیچ دستور لازم نیست 😎"
 )
 
 
 async def send_card(update: Update, png: bytes, caption: str = ""):
-    """ارسال کارت تصویری."""
     await update.message.chat.send_action(ChatAction.UPLOAD_PHOTO)
     await update.message.reply_photo(photo=png, caption=caption, parse_mode=ParseMode.MARKDOWN)
 
 
 async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """هندلر اصلی — هر پیام متنی."""
     text = update.message.text.strip()
     if not text:
         return
@@ -55,50 +50,55 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(WELCOME, parse_mode=ParseMode.MARKDOWN)
         return
 
-    # «همه» / «قیمت ها» / «قیمت‌ها»
-    if text in {"همه", "قیمت ها", "قیمت‌ها", "همه قیمت ها", "همه قیمت‌ها", "لیست"}:
+    # «همه» / «قیمت ها» → کارت کامل بازار ایران
+    if text in {"همه", "قیمت ها", "قیمت‌ها", "همه قیمت ها", "همه قیمت‌ها", "لیست", "قیمت"}:
         await update.message.chat.send_action(ChatAction.UPLOAD_PHOTO)
-        rows = iran_rows()
-        png = render.render_price_card(rows, title="بازار ایران", subtitle="قیمت لحظه‌ای")
-        await update.message.reply_photo(photo=png)
-        return
+        rows = []
+        for k, (name, _, _) in catalog.FIAT.items():
+            d = datafeeds.get_banner_data(k)
+            if d and d.get("price"):
+                rows.append((name, f"{d['price']:,} تومان", None))
+        png = banner.render_price_card(rows, title="بازار ایران", subtitle="قیمت لحظه‌ای")
+        if png:
+            await update.message.reply_photo(photo=png)
+            return
 
-    # رمزارزها
-    if text in {"کریپتو", "رمزارز", "رمزارزها", "ارز دیجیتال", "ارزهای دیجیتال"}:
+    # «کریپتو» / «رمزارز» → کارت رمزارزها
+    if text in {"کریپتو", "رمزارز", "رمزارزها", "ارز دیجیتال", "ارزهای دیجیتال", "کریپتوها"}:
         await update.message.chat.send_action(ChatAction.UPLOAD_PHOTO)
-        rows = crypto_rows(limit=12)
-        png = render.render_price_card(rows, title="رمزارزها", subtitle="دلاری")
-        await update.message.reply_photo(photo=png)
-        return
+        rows = []
+        for k, (name, _, _) in catalog.CRYPTO.items():
+            d = datafeeds.get_banner_data(k)
+            if d and d.get("price"):
+                rows.append((name, f"${d['price']:,.2f}", None))
+        png = banner.render_price_card(rows[:12], title="رمزارزها", subtitle="دلاری")
+        if png:
+            await update.message.reply_photo(photo=png)
+            return
 
     # پارس ورودی
-    kind, data = parse_input(text)
+    kind, data = render.parse_input(text)
 
     if kind == "single":
-        key = catalog.resolve(data) or data
-        # بنر جدید حرفه‌ای (پس‌زمینه پرچم/لوگو + نمودار)
+        key = data
         png = banner.render_banner(key)
         if png:
-            d = datafeeds.get_banner_data(key)
-            emoji = ""
-            if d:
-                cc = catalog.asset_urls(key)[2]
-                emoji = catalog.FLAG_EMOJI.get(cc, "") if key in catalog.FIAT else ""
             await send_card(update, png)
             return
-        # fallback: کارت ساده
-        png = render.render_single_card(key)
-        if png:
-            await send_card(update, png)
-            return
-    elif kind == "calc":
+        await update.message.reply_text(
+            f"❌ قیمت {key} پیدا نشد. مثال: `دلار`، `طلا`، `بیت کوین`",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if kind == "calc":
         key, amount = data
-        png = render_calc_card(key, amount)
+        png = banner.render_calc_card(key, amount)
         if png:
             await send_card(update, png)
             return
         # fallback متن
-        msg = calc_message(key, amount)
+        msg = render.calc_message(key, amount)
         if msg:
             await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
             return
@@ -113,7 +113,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "• `سکه`\n"
         "• `بیت کوین`\n"
         "• `125 دلار`\n"
-        "• `2 گرم طلا`",
+        "• `2 گرم طلا`\n\n"
+        "ارزهای پشتیبانی‌شده: دلار، یورو، پوند، درهم، لیر، فرانک، دینار، یوان، ین، روبل، تتر، طلا، سکه و ۳۰+ رمزارز",
         parse_mode=ParseMode.MARKDOWN,
     )
 
@@ -123,10 +124,9 @@ def main():
         print("❌ BOT_TOKEN ست نشده.")
         raise SystemExit(1)
     app = Application.builder().token(TOKEN).build()
-    # هیچ CommandHandler نیست — همه‌چیز متن عادی
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-    app.add_handler(MessageHandler(filters.COMMAND, on_text))  # /start هم می‌گیره
-    log.info("AuroraPriceBot v2 started (conversational)")
+    app.add_handler(MessageHandler(filters.COMMAND, on_text))
+    log.info("AuroraPriceBot v5 started (conversational)")
     app.run_polling()
 
 

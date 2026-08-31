@@ -172,7 +172,7 @@ def render_banner(code: str) -> Optional[bytes]:
     if bg is not None:
         base = _blurred_bg(bg)
     else:
-        # طلا/سکه — پس‌زمینه‌ی مشکی‌طلایی خالص
+        # طلا/سکه/آیکون‌های گمشده — پس‌زمینه‌ی مشکی‌طلایی خالص
         base = Image.new("RGB", (W, H), (12, 12, 16))
         bd = ImageDraw.Draw(base)
         for y in range(H):
