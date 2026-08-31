@@ -91,8 +91,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 else:
                     # کریپتو یا تتر: قیمت + درصد + محدوده High/Low (24h)
                     ohlcv = d.get("ohlcv", [])
-                    high_24 = max(x[2] for x in ohlcv) if ohlcv else price
-                    low_24 = min(x[3] for x in ohlcv) if ohlcv else price
+                    high_24 = max(x[1] for x in ohlcv) if ohlcv else price
+                    low_24 = min(x[2] for x in ohlcv) if ohlcv else price
                     
                     # برای تتر: نمایش به تومان
                     if unit == "تومان" and key == "usdt":
