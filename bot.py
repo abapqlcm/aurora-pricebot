@@ -5,9 +5,10 @@ AuroraPriceBot v5 — ربات گفتگویی کامل
 """
 import os
 import logging
+import time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import Application, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, ContextTypes, MessageHandler, CommandHandler, filters
 
 import render
 import banner
@@ -37,6 +38,14 @@ async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "بیا شروع کن! 🚀",
         parse_mode="Markdown"
     )
+
+
+async def on_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """دستور /ping — پینگ و زمان پاسخ."""
+    t0 = time.time()
+    await update.message.reply_text("🏓 Pong!")
+    dt = (time.time() - t0) * 1000
+    await update.message.reply_text(f"⚡ Ping: {dt:.0f}ms")
 
 
 async def _prefetch(ctx: ContextTypes.DEFAULT_TYPE, keys: list):
@@ -175,7 +184,8 @@ def main():
     app = Application.builder().token(TOKEN).build()
     
     # Handlers
-    app.add_handler(MessageHandler(filters.COMMAND, on_start))  # /start + /help و...
+    app.add_handler(CommandHandler("ping", on_ping))  # /ping
+    app.add_handler(CommandHandler("start", on_start))  # /start
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))  # متن عادی
     app.add_error_handler(on_error)
     
