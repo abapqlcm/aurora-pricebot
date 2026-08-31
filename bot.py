@@ -64,11 +64,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         kind, data = render.parse_input(text)
         
         if kind is None:
-            # ورودی نامعلوم
-            import catalog
-            all_names = list(catalog.FIAT.keys()) + list(catalog.GOLD.keys()) + list(catalog.STABLE.keys()) + list(catalog.CRYPTO.keys())
-            reply = f"🤔 متوجه نشدم.\n\nمثال‌های معتبر:\n• دلار، یورو، طلا، بیت‌کوین\n• ۱۲۵ دلار، ۲ گرم طلا\n• ۰.۰۱ بیت‌کوین"
-            await update.message.reply_text(reply)
+            # ورودی نامعلوم — خاموش بمون (چت نکن)
             return
         
         if kind == "single":
@@ -131,17 +127,17 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 total = amount * price
                 if unit == "تومان":
                     cap = (
-                        f"⭐️ 1 {d['name']} = {render.fmt_num(price)} تومان\n"
-                        f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = {render.fmt_num(int(total))} تومان\n"
-                        f"🕐 بروزرسانی: {render._now_fa()}"
+                        f"⭐️ 1 {d['name']} = <b>{render.fmt_num(price)}</b>\n"
+                        f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>{render.fmt_num(int(total))}</b>\n"
+                        f"🕐 Update: {render._now_en()}"
                     )
                 else:
                     cap = (
-                        f"⭐️ 1 {d['name']} = ${render.fmt_num(price)}\n"
-                        f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = ${render.fmt_num(round(total, 2))}\n"
-                        f"🕐 بروزرسانی: {render._now_fa()}"
+                        f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
+                        f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>${render.fmt_num(round(total, 2))}</b>\n"
+                        f"🕐 Update: {render._now_en()}"
                     )
-                await update.message.reply_photo(png, caption=cap)
+                await update.message.reply_photo(png, caption=cap, parse_mode="HTML")
             else:
                 await update.message.reply_text(f"❌ نتونستم قیمت {key} رو بگیرم.")
     
