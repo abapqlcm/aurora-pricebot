@@ -84,8 +84,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 if unit == "تومان" and key != "usdt":
                     # فیات/طلا/سکه (نه تتر)
                     cap = (
-                        f"⭐️ 1 {d['name']} = *{render.fmt_num(price)} تومان*\n"
-                        f"*{pct:+.2f}%*\n"
+                        f"⭐️ 1 {d['name']} = <b>{render.fmt_num(price)} تومان</b>\n"
+                        f"<b>{pct:+.2f}%</b>\n"
                         f"🕐 بروزرسانی: {render._now_fa()}"
                     )
                 else:
@@ -97,24 +97,24 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     # برای تتر: نمایش به تومان
                     if unit == "تومان" and key == "usdt":
                         cap = (
-                            f"⭐️ 1 {d['name']} = *{render.fmt_num(int(price))} تومان*\n"
-                            f"*{pct:+.2f}%*\n"
-                            f"\n📊 **محدوده ۲۴ ساعت:**\n"
-                            f"> 🔼 بالاترین: {render.fmt_num(int(high_24))} تومان\n"
-                            f"> 🔽 پایین‌ترین: {render.fmt_num(int(low_24))} تومان\n"
+                            f"⭐️ 1 {d['name']} = <b>{render.fmt_num(int(price))} تومان</b>\n"
+                            f"<b>{pct:+.2f}%</b>\n"
+                            f"\n📊 <b>محدوده ۲۴ ساعت:</b>\n"
+                            f"<blockquote>🔼 بالاترین: {render.fmt_num(int(high_24))} تومان\n"
+                            f"🔽 پایین‌ترین: {render.fmt_num(int(low_24))} تومان</blockquote>\n"
                             f"\n🕐 بروزرسانی: {render._now_fa()}"
                         )
                     else:
                         # دیگر کریپتوها: USD
                         cap = (
-                            f"⭐️ 1 {d['name']} = *${render.fmt_num(price)}*\n"
-                            f"*{pct:+.2f}%*\n"
-                            f"\n📊 **محدوده ۲۴ ساعت:**\n"
-                            f"> 🔼 بالاترین: ${render.fmt_num(high_24)}\n"
-                            f"> 🔽 پایین‌ترین: ${render.fmt_num(low_24)}\n"
+                            f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
+                            f"<b>{pct:+.2f}%</b>\n"
+                            f"\n📊 <b>محدوده ۲۴ ساعت:</b>\n"
+                            f"<blockquote>🔼 بالاترین: ${render.fmt_num(high_24)}\n"
+                            f"🔽 پایین‌ترین: ${render.fmt_num(low_24)}</blockquote>\n"
                             f"\n🕐 بروزرسانی: {render._now_fa()}"
                         )
-                await update.message.reply_photo(png, caption=cap, parse_mode="Markdown")
+                await update.message.reply_photo(png, caption=cap, parse_mode="HTML")
             else:
                 await update.message.reply_text(f"❌ نتونستم قیمت {key} رو بگیرم.")
             # دیتای بعدی از قبل آماده شه
