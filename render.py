@@ -191,6 +191,13 @@ def _nice(v) -> str:
     return str(v)
 
 
+def _now_en() -> str:
+    """Current time in English — HH:MM:SS."""
+    from datetime import datetime, timezone, timedelta
+    ir = timezone(timedelta(hours=3, minutes=30))
+    return datetime.now(ir).strftime("%H:%M:%S")
+
+
 def _now_fa() -> str:
     """زمان فعلی به وقت ایران — HH:MM:SS."""
     from datetime import datetime, timezone, timedelta
