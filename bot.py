@@ -11,6 +11,7 @@ from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 import render
 import banner
+import datafeeds
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -68,19 +69,33 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"❌ نتونستم بنر {key} رو بسازم.")
         
         elif kind == "calc":
-            # محاسبه: amount × ارز
+            # محاسبه: amount × ارز — بنر + کپشن (همه در یک پیام)
             key, amount = data
-            # ۱) بنر
+            d = datafeeds.get_banner_data(key)
             png = banner.render_banner(key)
-            if png:
-                await update.message.reply_photo(png)
+            if png and d:
+                unit = d.get("unit", "تومان")
+                price = d.get("price") or 0
+                total = amount * price
+                if unit == "تومان":
+                    cap = (
+                        f"⭐️ 1 {d['name']} = *{render.fmt_num(price)} تومان*\n"
+                        f"━━━━━━━━━━━━━\n"
+                        f"💱 *{render.fmt_num(render._nice(amount))} {d['name']}* = "
+                        f"*{render.fmt_num(int(total))} تومان*\n"
+                        f"🕐 بروزرسانی: {render._now_fa()}"
+                    )
+                else:
+                    cap = (
+                        f"⭐️ 1 {d['name']} = *${render.fmt_num(price)}*\n"
+                        f"━━━━━━━━━━━━━\n"
+                        f"💱 *{render.fmt_num(render._nice(amount))} {d['name']}* = "
+                        f"*${render.fmt_num(round(total, 2))}*\n"
+                        f"🕐 بروزرسانی: {render._now_fa()}"
+                    )
+                await update.message.reply_photo(png, caption=cap, parse_mode="Markdown")
             else:
-                await update.message.reply_text(f"❌ نتونستم بنر {key} رو بسازم.")
-            
-            # ۲) متن محاسبه
-            msg = render.calc_message(key, amount)
-            if msg:
-                await update.message.reply_text(msg, parse_mode="Markdown")
+                await update.message.reply_text(f"❌ نتونستم قیمت {key} رو بگیرم.")
     
     except Exception as e:
         log.error("on_text error: %s", e, exc_info=True)

@@ -159,6 +159,20 @@ def fmt_num(v) -> str:
     return f"{int(v):,}"
 
 
+def _nice(v) -> str:
+    """عدد تمیز برای نمایش (حذف صفرهای اضافی)."""
+    if isinstance(v, float) and v == int(v):
+        return str(int(v))
+    return str(v)
+
+
+def _now_fa() -> str:
+    """زمان فعلی به وقت ایران — HH:MM:SS."""
+    from datetime import datetime, timezone, timedelta
+    ir = timezone(timedelta(hours=3, minutes=30))
+    return datetime.now(ir).strftime("%H:%M:%S")
+
+
 # نمایش‌ها
 DISPLAY_FA = {}
 for k, (n, *_) in catalog.FIAT.items(): DISPLAY_FA[k] = n

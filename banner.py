@@ -107,43 +107,86 @@ def _blurred_bg(img: Image.Image) -> Image.Image:
     return Image.blend(img, overlay, 0.45)
 
 
-def _area_chart(history, w: int, h: int, up: bool) -> Image.Image:
-    """نمودار Area با گرادیان زیر خط."""
+def _area_chart(history, w: int, h: int, up: bool, ohlcv=None) -> Image.Image:
+    """نمودار حرفه‌ای: کندل‌استیک + خط smooth + گرادیان + محور قیمت."""
     if len(history) < 2:
         history = (history + [history[0]]) if history else [0, 0]
     mn, mx = min(history), max(history)
     rng = (mx - mn) or 1
-    pts = []
     n = len(history)
-    for i, v in enumerate(history):
-        x = i / (n - 1) * (w - 8) + 4
-        y = h - 8 - (v - mn) / rng * (h - 20)
-        pts.append((x, y))
-    # خطی‌سازی ملایم (میانگین متحرک) — بدون scipy
     line_color = GREEN if up else RED
 
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
 
-    # گرادیان زیر نمودار
+    # شبکه‌ی افقی ظریف (۴ خط)
+    for i in range(1, 4):
+        gy = int(h * i / 4)
+        d.line([(0, gy), (w, gy)], fill=(255, 255, 255, 14), width=1)
+
+    # گرادیان زیر نمودار (فقط خط)
+    pts = []
+    for i, v in enumerate(history):
+        x = i / (n - 1) * (w - 8) + 4
+        y = h - 8 - (v - mn) / rng * (h - 20)
+        pts.append((x, y))
     grad = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     gd = ImageDraw.Draw(grad)
-    for y in range(h):
-        alpha = max(0, int(120 * (1 - y / h)))
-        gd.line([(0, y), (w, y)], fill=(line_color[0], line_color[1], line_color[2], alpha))
+    for yy in range(h):
+        alpha = max(0, int(110 * (1 - yy / h)))
+        gd.line([(0, yy), (w, yy)], fill=(line_color[0], line_color[1], line_color[2], alpha))
     mask = Image.new("L", (w, h), 0)
     md = ImageDraw.Draw(mask)
-    md.polygon(pts + [(w - 4, h), (4, h)], fill=255)
+    md.polygon(pts + [(w - 4, h), (4, h)], fill=90)
     img.paste(grad, (0, 0), mask)
 
-    # خط اصلی — smooth و با سایه
-    d.line([(x+1, y+2) for x, y in pts], fill=(0,0,0,60), width=2, joint="curve")
-    d.line(pts, fill=line_color + (255,), width=3, joint="curve")
+    # کندل‌ها (اگر OHLC داریم و تعداد معقوله)
+    if ohlcv and 8 <= len(ohlcv) <= 96:
+        cw = max(2, min(7, (w - 8) // len(ohlcv) - 1))
+        step = (w - 8) / len(ohlcv)
+        # کمتر تعداد → کندل واقعی؛ زیاد → کندل باریک
+        show = ohlcv if len(ohlcv) <= 60 else ohlcv[::2]
+        sstep = (w - 8) / len(show)
+        for i, (o, hi, lo, c) in enumerate(show):
+            x = int(i * sstep + sstep / 2 + 4)
+            up_c = c >= o
+            col = GREEN if up_c else RED
+            # فتیله
+            yh = h - 8 - (hi - mn) / rng * (h - 20)
+            yl = h - 8 - (lo - mn) / rng * (h - 20)
+            d.line([(x, yh), (x, yl)], fill=col + (150,), width=1)
+            # بدنه
+            yo = h - 8 - (o - mn) / rng * (h - 20)
+            yc = h - 8 - (c - mn) / rng * (h - 20)
+            t, b = min(yo, yc), max(yo, yc)
+            if b - t < 1.5:
+                b = t + 1.5
+            d.rounded_rectangle((x - cw // 2, t, x + cw // 2 + 1, b), radius=1, fill=col + (235,))
+    else:
+        # کندل نداریم → خط smooth
+        d.line([(x + 1, y + 2) for x, y in pts], fill=(0, 0, 0, 60), width=2, joint="curve")
+        d.line(pts, fill=line_color + (255,), width=3, joint="curve")
 
-    # نقطه‌ی آخر با هاله
+    # خط اصلی — سایه و نقطه‌ی درخشان آخر
+    d.line([(x + 1, y + 2) for x, y in pts], fill=(0, 0, 0, 60), width=2, joint="curve")
+    d.line(pts, fill=line_color + (255,), width=3, joint="curve")
     ex, ey = pts[-1]
     for r, a in [(16, 60), (10, 110), (5, 255)]:
         d.ellipse((ex - r, ey - r, ex + r, ey + r), fill=line_color + (a,))
+
+    # محور قیمت — ۳ برچسب (بالا/وسط/پایین)
+    try:
+        f_ax = _font(16, "m")
+        for frac, va in [(0.06, "mm"), (0.5, "mm"), (0.94, "mm")]:
+            val = mx - rng * frac
+            gy = h - 8 - (val - mn) / rng * (h - 20)
+            txt = _fmt(val)
+            d.text((w - 6, gy), txt, font=f_ax, fill=(210, 210, 220, 210),
+                   anchor="ra", stroke_width=2, stroke_fill=(10, 10, 14, 220))
+            d.line([(0, gy), (w, gy)], fill=(255, 255, 255, 18), width=1)
+    except Exception:
+        pass
+
     return img
 
 
@@ -276,7 +319,7 @@ def render_banner(code: str) -> Optional[bytes]:
     chart_h = 300
     if len(hist) >= 3:
         up = (hist[-1] >= hist[0])
-        chart = _area_chart(hist, cw - 56, chart_h, up)
+        chart = _area_chart(hist, cw - 56, chart_h, up, ohlcv=data.get("ohlcv"))
         card.paste(chart, (28, y), chart)
         y += chart_h + 20
         # کپشن نمودار + تاریخ آخرین آپدیت قیمت

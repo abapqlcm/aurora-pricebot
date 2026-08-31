@@ -85,14 +85,20 @@ def tgju_history(tgju_id: str, days: int = 14) -> List[float]:
 
 def binance_klines(symbol: str, interval: str = "15m", limit: int = 96) -> List[float]:
     """کندل‌های اخیر — close prices، قدیمی→جدید."""
+    ohlcv = binance_ohlcv(symbol, interval, limit)
+    return [c[3] for c in ohlcv] if ohlcv else []
+
+
+def binance_ohlcv(symbol: str, interval: str = "15m", limit: int = 96) -> List[list]:
+    """کندل‌های اخیر — [open, high, low, close]، قدیمی→جدید."""
     def fetch():
         try:
             r = _get(f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}")
-            return [float(k[4]) for k in r.json()]
+            return [[float(k[1]), float(k[2]), float(k[3]), float(k[4])] for k in r.json()]
         except Exception as e:
-            log.warning("binance klines %s: %s", symbol, e)
+            log.warning("binance ohlcv %s: %s", symbol, e)
             return []
-    return _cached(("k", symbol), fetch)
+    return _cached(("ohlc", symbol), fetch)
 
 
 def binance_24h_change(symbol: str) -> Optional[float]:
@@ -230,9 +236,10 @@ def get_banner_data(code: str) -> Optional[dict]:
 
     if code in catalog.CRYPTO:
         name, sym, _ = catalog.CRYPTO[code]
-        klines = binance_klines(sym)
-        if not klines:
+        ohlcv = binance_ohlcv(sym)
+        if not ohlcv:
             return None
+        klines = [c[3] for c in ohlcv]
         price_usd = klines[-1]
         pct = binance_24h_change(sym)
         # تاریخچه‌ی ۲۴h به تومان تبدیل می‌کنیم (دلار × تتر داخلی) تا همه چیز تومانی باشه؟
@@ -243,7 +250,8 @@ def get_banner_data(code: str) -> Optional[dict]:
             pct = round((price_usd - p_24) / p_24 * 100, 2)
         return {
             "name": name, "price": price_usd, "change_pct": pct,
-            "change_abs": ch_abs, "history": klines, "unit": "دلار", "source": "Binance",
+            "change_abs": ch_abs, "history": klines, "ohlcv": ohlcv,
+            "unit": "دلار", "source": "Binance",
         }
 
     return None
