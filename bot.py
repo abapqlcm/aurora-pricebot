@@ -69,9 +69,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             log.info(f"unknown input, returning")
             return
         
-        # فقط اگه ورودی معتبره: typing indicator + جواب
-        log.info(f"valid input, sending typing indicator")
-        await update.message.chat.send_action("upload_photo")
+        # فقط اگه ورودی معتبره: جواب (بدون typing indicator — Telegram خودش عکس رو نشون می‌ده)
+        log.info(f"valid input, sending")
         
         if kind == "single":
             # اسم ارز تک — بنر + کپشن زنده در یک پیام
