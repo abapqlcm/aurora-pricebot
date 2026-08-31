@@ -43,7 +43,6 @@ async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def on_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """دستور /ping — پینگ و زمان پاسخ."""
     t0 = time.time()
-    await update.message.reply_text("🏓 Pong!")
     dt = (time.time() - t0) * 1000
     await update.message.reply_text(f"⚡ Ping: {dt:.0f}ms")
 
