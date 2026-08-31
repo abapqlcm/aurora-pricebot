@@ -272,10 +272,10 @@ def get_banner_data(code: str) -> Optional[dict]:
                 stats = r.json()['result']['symbols']['USDTTMN']['stats']
                 high_24 = float(stats.get('24h_highPrice', last))
                 low_24 = float(stats.get('24h_lowPrice', last))
-                # fake ohlcv برای chart (3 نقطه: low, current, high)
+                # fake ohlcv برای chart — ساختار [open, high, low, close] مثل بایننس
                 ohlcv = [
+                    [low_24, high_24, low_24, low_24],
                     [low_24, high_24, low_24, last],
-                    [last, high_24, last, last],
                     [last, high_24, low_24, last]
                 ]
             except:
