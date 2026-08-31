@@ -41,16 +41,30 @@ async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def on_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """دستور /ping — پینگ خالص شبکه به تلگرام API."""
+    """دستور /ping — پینگ خالص شبکه (TCP به سرور تلگرام)."""
     import asyncio
-    import requests
+    import socket
+
     def _ping():
+        # فقط زمان اتصال TCP (بدون DNS/TLS) — خالص‌ترین پینگ
         t0 = time.time()
-        requests.get("https://api.telegram.org", timeout=5)
-        return (time.time() - t0) * 1000
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(5)
+        try:
+            s.connect(("149.154.167.220", 443))  # سرور تلگرام
+            dt = (time.time() - t0) * 1000
+        except Exception:
+            dt = None
+        finally:
+            s.close()
+        return dt
+
     try:
         dt = await asyncio.get_running_loop().run_in_executor(None, _ping)
-        await update.message.reply_text(f"⚡ Network Ping: {dt:.0f}ms")
+        if dt is not None:
+            await update.message.reply_text(f"⚡ Network Ping: {dt:.0f}ms")
+        else:
+            await update.message.reply_text("❌ Ping failed")
     except Exception as e:
         await update.message.reply_text(f"❌ Ping failed: {e}")
 
