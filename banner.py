@@ -248,7 +248,15 @@ def _code_ids(code: str):
     return None, None
 
 
+_PNG_CACHE: dict = {}
+
 def render_banner(code: str) -> Optional[bytes]:
+    import time
+    ck = catalog.resolve(code) or code
+    hit = _PNG_CACHE.get(ck)
+    now = time.time()
+    if hit and now - hit[0] < 20:
+        return hit[1]
     data = datafeeds.get_banner_data(code)
     if not data or not data.get("price"):
         return None
@@ -259,10 +267,20 @@ def render_banner(code: str) -> Optional[bytes]:
         datafeeds.record_snapshot(catalog.resolve(code), tgju_id=tg_id)
     elif b_sym:
         datafeeds.record_snapshot(catalog.resolve(code), binance_sym=b_sym)
+    else:
+        datafeeds.record_snapshot(catalog.resolve(code))
 
     price = data["price"]
     pct = data.get("change_pct")
     hist = data.get("history") or []
+    # ارزهای er-api تاریخچه ندارن → خط تخت زنده بساز (از snapshotهای ربات)
+    if len(hist) < 2 and price:
+        from datafeeds import local_history
+        lh = local_history(code)
+        if len(lh) >= 2:
+            hist = [p for _, p in lh]
+        else:
+            hist = [price * 0.999, price]
 
     # پس‌زمینه
     bg = _fetch_bg_image(code)
@@ -374,5 +392,6 @@ def render_banner(code: str) -> Optional[bytes]:
             font=f_wm, fill=(230, 230, 235, 200), anchor="mm")
 
     buf = io.BytesIO()
-    out.convert("RGB").save(buf, "PNG", optimize=True)
-    return buf.getvalue()
+    out.convert("RGB").save(buf, "PNG")
+    _PNG_CACHE[ck] = (now, buf.getvalue())
+    return _PNG_CACHE[ck][1]

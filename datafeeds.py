@@ -64,8 +64,15 @@ def tgju_quote(tgju_id: str) -> Tuple[Optional[int], Optional[float], Optional[i
     return p, dp, d
 
 
+_hist_cache: dict = {}
+
 def tgju_history(tgju_id: str, days: int = 14) -> List[float]:
-    """بسته‌شدن‌های روزانه از indicator API — قدیمی→جدید."""
+    """بسته‌شدن‌های روزانه از indicator API — کش 1 ساعته (روزانه‌ست، زود عوض نمی‌شه)."""
+    key = ("h14", tgju_id)
+    import time as _t
+    hit = _hist_cache.get(key)
+    if hit and _t.time() - hit[0] < 3600:
+        return hit[1]
     def fetch():
         try:
             r = _get(f"https://api.tgju.org/v1/market/indicator/summary-table-data/{tgju_id}", timeout=15)
@@ -74,7 +81,9 @@ def tgju_history(tgju_id: str, days: int = 14) -> List[float]:
             for row in rows:
                 close = row[3]  # [open, low, high, close, ...]
                 closes.append(float(str(close).replace(",", "")))
-            return list(reversed(closes))
+            v = list(reversed(closes))
+            _hist_cache[key] = (_t.time(), v)
+            return v
         except Exception as e:
             log.warning("tgju history %s: %s", tgju_id, e)
             return []
@@ -162,6 +171,39 @@ def binance_fx_rate(usd_pair: str) -> Optional[float]:
     return _cached(("fx", usd_pair), fetch)
 
 
+
+
+# ---------------- ER-API (166 ارز جهانی — یک کال) ----------------
+
+_fx_rates_cache = {"t": 0, "rates": {}}
+
+def erapi_rates() -> dict:
+    """نرخ جهانی همه‌ی ارزها نسبت به دلار — کش 10 دقیقه."""
+    import time
+    now = time.time()
+    if _fx_rates_cache["rates"] and now - _fx_rates_cache["t"] < 600:
+        return _fx_rates_cache["rates"]
+    try:
+        r = _get("https://open.er-api.com/v6/latest/USD", timeout=12)
+        rates = r.json().get("rates", {})
+        if rates:
+            _fx_rates_cache["t"] = now
+            _fx_rates_cache["rates"] = rates
+        return rates
+    except Exception as e:
+        log.warning("erapi: %s", e)
+        return _fx_rates_cache["rates"]
+
+
+def fx_to_usd(ccy: str) -> Optional[float]:
+    """1 واحد از این ارز چند دلار؟ (مثل SEK → 0.104)"""
+    rates = erapi_rates()
+    v = rates.get(ccy.upper())
+    if not v:
+        return None
+    return 1.0 / v
+
+
 # ---------------- واحد یکپارچه ----------------
 
 def get_banner_data(code: str) -> Optional[dict]:
@@ -182,6 +224,11 @@ def get_banner_data(code: str) -> Optional[dict]:
             # دلار = تتر تومانی (بازار آزاد)
             price = round(usdt_t) if usdt_t else None
             _, pct, _ = wallex_quote("USDTTMN")
+        elif tg_id is None:
+            # ارزهای بدون TGJU → er-api (نرخ جهانی) × تتر تومانی
+            v = fx_to_usd(code)
+            if usdt_t and v:
+                price = round(usdt_t * v)
         elif usdt_t and fx_sym:
             rate = binance_fx_rate(fx_sym)
             if rate:
@@ -199,7 +246,7 @@ def get_banner_data(code: str) -> Optional[dict]:
         return {
             "name": name, "price": price, "change_pct": pct,
             "change_abs": None,
-            "history": [x / 10 for x in tgju_history(tg_id)],
+            "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
             "unit": "تومان", "source": "Wallex+Binance (لایو)",
         }
 
@@ -277,6 +324,9 @@ def record_snapshot(code: str, tgju_id: str = None, binance_sym: str = None):
     path = _hist_path(f"local_{code}")
     try:
         price = None
+        if not tgju_id and not binance_sym:
+            d = get_banner_data(code)
+            price = d.get("price") if d else None
         if tgju_id:
             p, _, _ = tgju_quote(tgju_id)
             price = p // 10 if p else None  # تومان
