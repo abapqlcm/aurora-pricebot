@@ -57,16 +57,20 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     
     text = update.message.text.strip()
+    log.info(f"input: {text}")
     
     try:
         # پارس ورودی
         kind, data = render.parse_input(text)
+        log.info(f"parsed: kind={kind}")
         
         if kind is None:
-            # ورودی نامعلوم — بدون جواب و بدون typing indicator
+            # ورودی نامعلوم — فوری return (بدون fetch، بدون typing)
+            log.info(f"unknown input, returning")
             return
         
         # فقط اگه ورودی معتبره: typing indicator + جواب
+        log.info(f"valid input, sending typing indicator")
         await update.message.chat.send_action("upload_photo")
         
         if kind == "single":
