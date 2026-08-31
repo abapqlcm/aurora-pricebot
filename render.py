@@ -9,7 +9,7 @@ import datafeeds
 # ساخت FA_TO_KEY خودکار از catalog
 FA_TO_KEY = {}
 # ارزهای فیات
-for k, (name, _, _) in catalog.FIAT.items():
+for k, (name, *_rest) in catalog.FIAT.items():
     FA_TO_KEY[name] = k
     FA_TO_KEY[k] = k
 # طلا/سکه

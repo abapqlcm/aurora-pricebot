@@ -123,7 +123,7 @@ def resolve(code: str) -> Optional[str]:
 def asset_urls(code: str):
     """(آدرس تصویر پس‌زمینه، نوع) — flag یا crypto icon."""
     if code in FIAT:
-        _, cc, _ = FIAT[code]
+        _, cc = FIAT[code][0], FIAT[code][1]
         return f"https://flagcdn.com/w1280/{cc}.png", "flag", cc
     if code in CRYPTO:
         _, _, icon = CRYPTO[code]

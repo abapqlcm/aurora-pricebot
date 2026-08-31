@@ -163,7 +163,7 @@ def _code_ids(code: str):
     if not std:
         return None, None
     if std in catalog.FIAT:
-        return catalog.FIAT[std][2], None
+        return catalog.FIAT[std][2], None  # tgju_id
     if std in catalog.GOLD:
         return catalog.GOLD[std][1], None
     if std in catalog.STABLE:
