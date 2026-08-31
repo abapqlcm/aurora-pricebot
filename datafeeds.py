@@ -12,6 +12,7 @@ from typing import List, Optional, Tuple
 import requests
 
 import catalog
+import alanchand
 
 log = logging.getLogger("data")
 
@@ -216,7 +217,16 @@ def get_banner_data(code: str) -> Optional[dict]:
         return None
     if code in catalog.FIAT:
         name, _, tg_id, fx_sym = catalog.FIAT[code]
-        # نرخ جهانی ارز نسبت به دلار از بایننس + تتر تومانی لایو → قیمت تومانی زنده
+        # ۱) اول بازار روز از Alanchand (خرید/فروش صرافی)
+        al = alanchand.get_price(code)
+        if al:
+            return {
+                "name": name, "price": al["sell"], "change_pct": None,
+                "change_abs": None,
+                "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
+                "unit": "تومان", "source": "Alanchand (بازار روز)",
+            }
+        # ۲) fallback: Wallex + Binance (لایو)
         usdt_t = usdt_toman()
         price = None
         pct = None
