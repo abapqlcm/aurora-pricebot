@@ -114,7 +114,6 @@ CRYPTO = {
     "XRP":  ("ریپل",       "XRPUSDT",  "xrp"),
     "ADA":  ("کاردانو",    "ADAUSDT",  "ada"),
     "DOGE": ("دوج‌کوین",   "DOGEUSDT", "doge"),
-    "TON":  ("تون‌کوین",   "TONUSDT",  "ton"),
     "TRX":  ("ترون",       "TRXUSDT",  "trx"),
     "SHIB": ("شیبا اینو",  "SHIBUSDT", "shib"),
     "DOT":  ("پولکادات",   "DOTUSDT",  "dot"),
