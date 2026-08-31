@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+banner_*.png
+assets/*.png
+.DS_Store
