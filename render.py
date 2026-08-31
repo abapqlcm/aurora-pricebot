@@ -163,7 +163,7 @@ def parse_input(text: str) -> Tuple[Optional[str], Any]:
 
 
 def _resolve_text(t: str):
-    """جستجوی جزئی + resolve از catalog."""
+    """جستجوی جزئی + resolve از catalog — فقط برای عبارات کامل."""
     t = _clean(t.lower())
     # دقیق
     if t in FA_TO_KEY:
@@ -173,14 +173,14 @@ def _resolve_text(t: str):
     r = resolve(t)
     if r:
         return r
-    # جستجوی هر کلمه در FA_TO_KEY
-    for word in t.split():
-        if word in FA_TO_KEY:
-            return FA_TO_KEY[word]
-    # جستجوی جزئی (a in b)
-    for k, v in FA_TO_KEY.items():
-        if len(k) > 2 and (k in t or t in k):
-            return v
+    # جستجوی جزئی (a in b) — فقط اگه single word باشه و کلمه‌ی خطرناک نباشه
+    if ' ' not in t:
+        DANGEROUS = {"بات", "بیا", "کره", "رئال", "پزو", "شکل", "منات", "درام", "سوم", "نایرا", "بر", "وون", "گرم"}
+        if t in DANGEROUS:
+            return None
+        for k, v in FA_TO_KEY.items():
+            if len(k) > 2 and (k in t or t in k):
+                return v
     return None
 
 
