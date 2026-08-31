@@ -18,8 +18,8 @@ FLAG_EMOJI = {
 # قیمت لایو = تتر تومانی (والکس) × نرخ جهانی ارز/دلار (بایننس)
 FIAT = {
     "dollar":   ("دلار آمریکا",        "us", "price_dollar_rl", None),   # = تتر
-    "euro":     ("یورو",               "eu", "price_eur",        "EURUSDT"),
-    "pound":    ("پوند انگلیس",        "gb", "price_gbp",        "GBPUSDT"),
+    "euro":     ("یورو",               "eu", "price_eur",        None),
+    "pound":    ("پوند انگلیس",        "gb", "price_gbp",        None),
     "aed":      ("درهم امارات",        "ae", "price_aed",        None),   # بایننس نداره → دلار×3.6725 ثابت
     "try":      ("لیر ترکیه",          "tr", "price_try",        "TRYUSDT"),
     "chf":      ("فرانک سوئیس",        "ch", "price_chf",        None),
