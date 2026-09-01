@@ -7,6 +7,8 @@ import os
 import logging
 import time
 import threading
+import asyncio
+import subprocess
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 from telegram.ext import Application, ContextTypes, MessageHandler, CommandHandler, CallbackQueryHandler, filters
@@ -14,6 +16,7 @@ from telegram.ext import Application, ContextTypes, MessageHandler, CommandHandl
 import render
 import banner
 import datafeeds
+import admin
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -148,6 +151,20 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """کاربر متن فرستاد — پردازش و جواب."""
     if not update.message or not update.message.text:
         return
+
+    # 📊 پنل ادمین: ثبت کاربر/گروه (سبک — فقط شمارنده)
+    try:
+        admin.track_user(update.message.from_user)
+        admin.track_group(update.message.chat)
+    except Exception as e:
+        log.warning("track: %s", e)
+
+    # 📢 حالت broadcast ادمین؟
+    try:
+        if await on_broadcast_text(update, ctx):
+            return
+    except Exception as e:
+        log.warning("broadcast: %s", e)
     
     text = update.message.text.strip()
     log.info(f"input: {text}")
@@ -371,22 +388,202 @@ async def _post_init(application):
     application.create_task(_warm_loop(application))
 
 
+# ================= پنل ادمین (فقط OWNER) =================
+
+def _is_owner(update: Update) -> bool:
+    u = update.effective_user
+    return bool(u and u.id == admin.OWNER_ID)
+
+
+def _admin_main_kb():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👥 کاربران", callback_data="adm_users"),
+         InlineKeyboardButton("👨‍👩‍👧‍👦 گروه‌ها", callback_data="adm_groups")],
+        [InlineKeyboardButton("📈 نمودار ۷روز", callback_data="adm_chart"),
+         InlineKeyboardButton("🏥 سلامت", callback_data="adm_health")],
+        [InlineKeyboardButton("📢 ارسال همگانی", callback_data="adm_bc"),
+         InlineKeyboardButton("🔄 بروزرسانی", callback_data="adm_main")],
+    ])
+
+
+async def on_admin(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """/admin — داشبورد اصلی."""
+    if not _is_owner(update):
+        await update.message.reply_text("⛔ این بخش فقط برای مالک رباته.")
+        return
+    s = admin.overview()
+    txt = (
+        "🛠 <b>پنل ادمین — AuroraPriceBot</b>\n\n"
+        f"👥 کاربران: <b>{s['users']}</b>\n"
+        f"🟢 فعال ۲۴ساعت: <b>{s['act24']}</b>\n"
+        f"🟡 فعال ۷روز: <b>{s['act7']}</b>\n"
+        f"👨‍👩‍👧‍👦 گروه‌ها: <b>{s['groups']}</b>\n\n"
+        f"💬 پیام امروز: <b>{s['today_msgs']}</b> (دیروز: {s['yday_msgs']})\n"
+        f" cumulative جمع کل پیام‌ها: <b>{s['total_msgs']}</b>\n"
+        f"🕐 <i>{render._now_en()}</i>"
+    )
+    await update.message.reply_text(txt, parse_mode="HTML", reply_markup=_admin_main_kb())
+
+
+async def _admin_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE, query, data: str):
+    """هندلر دکمه‌های پنل ادمین."""
+    if data == "adm_main":
+        s = admin.overview()
+        txt = (
+            "🛠 <b>پنل ادمین</b>\n\n"
+            f"👥 کاربران: <b>{s['users']}</b> | 🟢 ۲۴س: <b>{s['act24']}</b> | 🟡 ۷ر: <b>{s['act7']}</b>\n"
+            f"👨‍👩‍👧‍👦 گروه‌ها: <b>{s['groups']}</b>\n"
+            f"💬 امروز: <b>{s['today_msgs']}</b> | جمع: <b>{s['total_msgs']}</b>"
+        )
+        await query.edit_message_text(txt, parse_mode="HTML", reply_markup=_admin_main_kb())
+
+    elif data == "adm_users":
+        chunk, total, has_more = admin.users_list(0)
+        lines = ["👥 <b>کاربران (۱۰ آخر):</b>\n"]
+        for uid, u in chunk:
+            un = f"@{u['username']}" if u.get("username") else "—"
+            lines.append(f"• <b>{u.get('name') or 'بی‌نام'}</b> ({un}) — {u.get('count', 0)} پیام")
+        lines.append(f"\nجمع کل: <b>{total}</b>")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ برگشت", callback_data="adm_main")]])
+        await query.edit_message_text("\n".join(lines), parse_mode="HTML", reply_markup=kb)
+
+    elif data == "adm_groups":
+        gs = admin.groups_list()
+        lines = [f"👨‍👩‍👧‍👦 <b>گروه‌ها ({len(gs)}):</b>\n"]
+        for cid, g in gs[:15]:
+            lines.append(f"• <b>{g.get('title') or 'بی‌نام'}</b> — {g.get('count', 0)} پیام")
+        if not gs:
+            lines.append("هنوز گروهی ثبت نشده.")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ برگشت", callback_data="adm_main")]])
+        await query.edit_message_text("\n".join(lines), parse_mode="HTML", reply_markup=kb)
+
+    elif data == "adm_chart":
+        s = admin.overview()
+        daily = s["daily"]
+        if daily:
+            mx = max(daily.values()) or 1
+            lines = ["📈 <b>پیام‌های ۷ روز اخیر:</b>\n"]
+            for day, v in daily.items():
+                bar = "▇" * max(1, int(v / mx * 22))
+                lines.append(f"<code>{day[5:]}</code> {bar} <b>{v}</b>")
+        else:
+            lines = ["هنوز داده‌ای نیست."]
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ برگشت", callback_data="adm_main")]])
+        await query.edit_message_text("\n".join(lines), parse_mode="HTML", reply_markup=kb)
+
+    elif data == "adm_health":
+        import asyncio
+        import socket
+
+        def _ping():
+            t0 = time.time()
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(4)
+                s.connect(("149.154.167.220", 443))
+                s.close()
+                return f"{(time.time() - t0) * 1000:.0f}ms"
+            except Exception:
+                return "N/A"
+
+        loop = asyncio.get_running_loop()
+        tg = await loop.run_in_executor(None, _ping)
+        try:
+            import shutil
+            du = subprocess.run(["sh", "-c", "du -sh hist 2>/dev/null | cut -f1"], capture_output=True, text=True, timeout=10).stdout.strip()
+        except Exception:
+            du = "?"
+        try:
+            uptime_s = time.time() - _BOOT_TIME
+            uptime = f"{int(uptime_s // 3600)}h {int(uptime_s % 3600 // 60)}m"
+        except Exception:
+            uptime = "?"
+        txt = (
+            "🏥 <b>سلامت ربات:</b>\n\n"
+            f"⚡ پینگ تلگرام: <b>{tg}</b>\n"
+            f"⏱ آپ‌تایم: <b>{uptime}</b>\n"
+            f"💾 حجم hist: <b>{du}</b>\n"
+            f"🧵 کش بنرها: <b>{len(banner._PNG_CACHE)}</b>\n"
+            f"🎬 کش ویدیوها: <b>{len(banner._MP4_CACHE)}</b>"
+        )
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ برگشت", callback_data="adm_main")]])
+        await query.edit_message_text(txt, parse_mode="HTML", reply_markup=kb)
+
+    elif data == "adm_bc":
+        # شروع broadcast — منتظر متن بعدی از ادمین
+        _BC_STATE[admin.OWNER_ID] = True
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data="adm_cancel_bc")]])
+        await query.edit_message_text(
+            "📢 <b>ارسال همگانی</b>\n\nمتن پیام رو بفرست (همون پیام به همه‌ی کاربران می‌ره).\n"
+            "برای انصراف دکمه‌ی زیر یا /cancel_bc.",
+            parse_mode="HTML", reply_markup=kb)
+
+    elif data == "adm_cancel_bc":
+        _BC_STATE.pop(admin.OWNER_ID, None)
+        await query.edit_message_text("✅ ارسال همگانی لغو شد.", reply_markup=_admin_main_kb())
+
+
+_BC_STATE: dict = {}
+_BOOT_TIME = time.time()
+
+
+async def on_admin_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """CallbackQuery پنل ادمین."""
+    query = update.callback_query
+    if not _is_owner(update):
+        await query.answer("⛔ فقط مالک", show_alert=True)
+        return
+    await query.answer()
+    try:
+        await _admin_cb(update, ctx, query, query.data)
+    except Exception as e:
+        log.error("admin cb: %s", e)
+        try:
+            await query.answer("⚠️ خطا — دوباره تلاش کن", show_alert=False)
+        except Exception:
+            pass
+
+
+async def on_broadcast_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """اگه ادمین تو حالت broadcast هست، متن = پیام همگانی."""
+    if not _BC_STATE.get(update.effective_user.id):
+        return False
+    _BC_STATE.pop(update.effective_user.id, None)
+    msg = update.message
+    targets = admin.all_user_ids()
+    ok = fail = 0
+    status = await msg.reply_text(f"📢 در حال ارسال به {len(targets)} کاربر...")
+    for uid in targets:
+        try:
+            await ctx.bot.copy_message(chat_id=int(uid), from_chat_id=msg.chat_id, message_id=msg.message_id)
+            ok += 1
+        except Exception:
+            fail += 1
+        await asyncio.sleep(0.05)  # rate-limit
+    await status.edit_text(f"📢 تمام شد!\n✅ موفق: {ok}\n❌ ناموفق: {fail}")
+    return True
+
+
 def main():
     """شروع ربات."""
     if not TOKEN:
         print("❌ BOT_TOKEN ست نشده.")
         raise SystemExit(1)
-    
+
     app = Application.builder().token(TOKEN).post_init(_post_init).concurrent_updates(True).build()
-    
+
     # Handlers
     app.add_handler(CommandHandler("ping", on_ping))  # /ping
     app.add_handler(CommandHandler("start", on_start))  # /start
+    app.add_handler(CommandHandler("admin", on_admin))  # 🛠 پنل ادمین (OWNER)
+    app.add_handler(CommandHandler("cancel_bc", lambda u, c: u.message.reply_text("لغو شد.") or _BC_STATE.pop(u.effective_user.id, None)))
+    # دکمه‌های ادمین — قبل از هندلر عمومی callback (group=-1 اولویت)
+    app.add_handler(CallbackQueryHandler(on_admin_button, pattern="^adm_"))
     app.add_handler(CallbackQueryHandler(on_button_click))  # دکمه‌های Inline
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))  # متن عادی
     app.add_error_handler(on_error)
-    
-    log.info("🚀 AuroraPriceBot v6 started (fast warm-cache)")
+
+    log.info("🚀 AuroraPriceBot v6 started (fast warm-cache + admin panel)")
     app.run_polling()
 
 
