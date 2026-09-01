@@ -282,7 +282,8 @@ def render_banner(code: str) -> Optional[bytes]:
     ck = catalog.resolve(code) or code
     hit = _PNG_CACHE.get(ck)
     now = time.time()
-    if hit and now - hit[0] < 20:
+    # ۷. کش ۵ ثانیه (بجای ۲۰) برای اینکه تغییرات ظاهری زودتر نمایش داده بشن
+    if hit and now - hit[0] < 5:
         return hit[1]
     data = datafeeds.get_banner_data(code)
     if not data or not data.get("price"):
