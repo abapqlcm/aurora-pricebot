@@ -1,11 +1,12 @@
 """
-AuroraPriceBot v5 — ربات گفتگویی کامل
+AuroraPriceBot v6 — ربات گفتگویی کامل (thread-safe)
 کاربر تایپ می‌کنه: «دلار»، «طلا»، «بیت کوین»، «125 دلار»، «2 گرم طلا»...
 ربات بنر تصویری حرفه‌ای می‌فرسته.
 """
 import os
 import logging
 import time
+import threading
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, ContextTypes, MessageHandler, CommandHandler, CallbackQueryHandler, filters
@@ -112,19 +113,31 @@ async def _prefetch(ctx: ContextTypes.DEFAULT_TYPE, keys: list):
 
 HOT_KEYS = ["dollar", "euro", "BTC", "usdt", "gold_18", "pound", "try", "aed", "SOL", "ETH"]
 
+# ۱۲. قفل کلی برای دسترسی‌های هم‌زمان به کش‌ها/فایل‌ها (thread-safe)
+_warm_lock = threading.Lock()
+
 
 async def _warm_loop(ctx: ContextTypes.DEFAULT_TYPE):
-    """هر ۱۰ ثانیه ارزهای محبوب رو از قبل رندر می‌کنه — جواب کاربر همیشه <1s."""
+    """هر ۱۰ ثانیه ارزهای محبوب رو از قبل رندر می‌کنه — جواب کاربر همیشه <1s.
+    با lock + stagger: هر بار فقط یه key، بدون فشار به APIها."""
     import asyncio
+    idx = 0
     while True:
         try:
-            def _job():
-                for k in HOT_KEYS:
-                    try:
-                        datafeeds.get_banner_data(k)
-                        banner.render_banner(k)
-                    except Exception:
-                        pass
+            k = HOT_KEYS[idx % len(HOT_KEYS)]
+            idx += 1
+
+            def _job(key=k):
+                if not _warm_lock.acquire(blocking=False):
+                    return  # قبلی هنوز در حال اجراست — skip (بدون صف)
+                try:
+                    datafeeds.get_banner_data(key)
+                    banner.render_banner(key)
+                except Exception:
+                    pass
+                finally:
+                    _warm_lock.release()
+
             await asyncio.get_running_loop().run_in_executor(None, _job)
         except Exception as e:
             log.warning("warm loop: %s", e)

@@ -348,8 +348,19 @@ def _hist_path(key: str) -> str:
 def record_snapshot(code: str, tgju_id: str = None, binance_sym: str = None):
     """قیمت لحظه‌ای را در تاریخچه‌ی محلی ثبت می‌کند — هر بار که بنر خواسته شه."""
     import time as _t
+    # ۱۱. جلوگیری از ثبت تکراری در <55 ثانیه (warm loop نباید history رو شلوغ کنه)
     path = _hist_path(f"local_{code}")
     try:
+        now = int(_t.time())
+        data = []
+        if _os.path.exists(path):
+            try:
+                data = _json.load(open(path))
+            except Exception:
+                data = []
+        # اگه آخرین snapshot تازه‌ست (<55s)، ثبت نکن (بدون duplicate و بدون fetch اضافه)
+        if data and now - data[-1][0] < 55:
+            return
         price = None
         if not tgju_id and not binance_sym:
             d = get_banner_data(code)
@@ -364,13 +375,6 @@ def record_snapshot(code: str, tgju_id: str = None, binance_sym: str = None):
                 price = None
         if not price:
             return
-        now = int(_t.time())
-        data = []
-        if _os.path.exists(path):
-            try:
-                data = _json.load(open(path))
-            except Exception:
-                data = []
         data.append([now, price])
         # حذف نقاط قدیمی‌تر از ۶۰ نقطه یا ۲۴ ساعت
         data = [x for x in data if now - x[0] < 86400][-60:]

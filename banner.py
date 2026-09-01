@@ -4,6 +4,7 @@
 """
 import io
 import logging
+import threading
 from typing import Optional
 
 import requests
@@ -262,6 +263,7 @@ def _code_ids(code: str):
 
 
 _PNG_CACHE: dict = {}
+_RENDER_LOCK = threading.Lock()  # ۱۳. رندر هم‌زمان دوتا thread برای یه ارز → lock
 
 def _asset_type(code: str) -> str:
     """نوع ارز برای رنگ‌بندی: fiat / gold / crypto / stable."""
@@ -285,6 +287,18 @@ def render_banner(code: str) -> Optional[bytes]:
     # کش ۲۰ ثانیه — warm loop هر ۱۰ ثانیه رفرش می‌کنه (جواب فوری)
     if hit and now - hit[0] < 20:
         return hit[1]
+
+    # ۱۳. فقط یه thread در آن واحد رندر کنه (double-check بعد از lock)
+    with _RENDER_LOCK:
+        hit = _PNG_CACHE.get(ck)
+        now = time.time()
+        if hit and now - hit[0] < 20:
+            return hit[1]
+        return _render_banner_uncached(code, ck, now)
+
+
+def _render_banner_uncached(code: str, ck: str, now: float) -> Optional[bytes]:
+    """رندر واقعی بنر — فقط از render_banner صدا زده شه (lock گرفته شده)."""
     data = datafeeds.get_banner_data(code)
     if not data or not data.get("price"):
         return None
