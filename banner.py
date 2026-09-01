@@ -337,7 +337,10 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
     import subprocess as _sp, tempfile, os as _os
     import imageio_ffmpeg
     _FF = imageio_ffmpeg.get_ffmpeg_exe()
-    w, h = Wv, Hv
+    # ۲۴. ابعاد زوج — شرط تلگرام برای animation (اتوپلی GIF)
+    w, h = (Wv // 2) * 2, (Hv // 2) * 2
+    if (w, h) != (Wv, Hv):
+        base_img = base_img.crop((0, 0, w, h))
     tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
     tmp.close()
     try:

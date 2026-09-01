@@ -200,13 +200,23 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             vid = await loop2.run_in_executor(None, banner.render_banner_video, key)
             if vid:
                 d0 = await loop2.run_in_executor(None, datafeeds.get_banner_data, key)
-                await update.message.reply_video(
-                    vid,
-                    caption=_caption_for(key, d0),
-                    parse_mode="HTML",
-                    reply_markup=_carousel_kb(key),
-                    supports_streaming=True,
-                )
+                # ۲۳. حالت GIF: reply_animation — اتوپلی + لوپ بی‌نهایت (بدون دکمه‌ی پخش)
+                try:
+                    await update.message.reply_animation(
+                        vid,
+                        caption=_caption_for(key, d0),
+                        parse_mode="HTML",
+                        reply_markup=_carousel_kb(key),
+                    )
+                except Exception as e_anim:
+                    log.warning("animation send failed (%s) → video fallback", e_anim)
+                    await update.message.reply_video(
+                        vid,
+                        caption=_caption_for(key, d0),
+                        parse_mode="HTML",
+                        reply_markup=_carousel_kb(key),
+                        supports_streaming=True,
+                    )
             else:
                 await send_price_card(update, key, edit=False)
             # دیتای بعدی از قبل آماده شه
