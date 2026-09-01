@@ -182,6 +182,9 @@ def _resolve_text(t: str):
 
 
 def fmt_num(v) -> str:
+    """BUG-3: دقت داینامیک — قیمت‌های خیلی کوچک تا 10 رقم معنادار."""
+    if isinstance(v, float) and 0 < v < 0.01:
+        return f"{v:,.10f}".rstrip("0").rstrip(".")
     if isinstance(v, float) and v < 10:
         return f"{v:,.6f}".rstrip("0").rstrip(".")
     if isinstance(v, float):
@@ -275,14 +278,6 @@ def render_calc_card(key, amount):
     d = datafeeds.get_banner_data(key)
     if not d or not d.get("price"):
         return None
-    price = d["price"]
-    total = amount * price
-    unit = d["unit"]
-    name = d["name"]
-    if unit == "تومان":
-        caption = f"{fmt_num(amount)} {name} = {fmt_num(int(total))} تومان"
-    else:
-        caption = f"{fmt_num(amount)} {name} = ${fmt_num(total)}"
     png = _banner.render_banner(key)
     return png
 

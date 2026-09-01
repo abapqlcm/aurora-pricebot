@@ -82,7 +82,7 @@ async def on_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ctx = ssl.create_default_context()
         try:
             with socket.create_connection(("api.telegram.org", 443), timeout=5) as raw:
-                with ctx.wrap_socket(raw, server_hostname="api.telegram.org") as s:
+                with ctx.wrap_socket(raw, server_hostname="api.telegram.org"):
                     return (time.time() - t0) * 1000
         except Exception:
             return None
@@ -185,11 +185,11 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         
         if kind is None:
             # ورودی نامعلوم — فوری return (بدون fetch، بدون typing)
-            log.info(f"unknown input, returning")
+            log.info("unknown input, returning")
             return
         
         # فقط اگه ورودی معتبره: جواب (بدون typing indicator — Telegram خودش عکس رو نشون می‌ده)
-        log.info(f"valid input, sending")
+        log.info("valid input, sending")
         
         # ۱۰. fetch+render در thread جدا — event loop بلاک نشه (سرعت)
         import asyncio
@@ -255,6 +255,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 unit = d.get("unit", "تومان")
                 price = d.get("price") or 0
                 total = amount * price
+                # BUG-2 فیکس: کریپتوی کوچک (SHIB) قبلاً «$0» می‌شد → دقت داینامیک
                 if unit == "تومان":
                     cap = (
                         f"⭐️ 1 {d['name']} = <b>{render.fmt_num(price)}</b>\n"
@@ -264,7 +265,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 else:
                     cap = (
                         f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
-                        f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>${render.fmt_num(round(total, 2))}</b>\n"
+                        f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>${render.fmt_num(total)}</b>\n"
                         f"🕐 Update: {render._now_en()}"
                     )
                 try:
@@ -298,7 +299,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     else:
                         cap = (
                             f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
-                            f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>${render.fmt_num(round(total, 2))}</b>\n"
+                            f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>${render.fmt_num(total)}</b>\n"
                             f"🕐 Update: {render._now_en()}"
                         )
                     await update.message.reply_photo(png, caption=cap, parse_mode="HTML")
@@ -482,7 +483,7 @@ async def on_button_click(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif query.data == "show_fiat":
         await send_price_card(query, "dollar", edit=True)
     elif query.data == "help_search":
-        await query.edit_message_text("🔍 جستجو: اسم ارز رو بنویس یا `شماره ارز`")
+        await query.edit_message_text("🔍 جستجو: اسم ارز رو بنویس، یا عدد و ارز مثل «125 دلار»")
 
 
 async def _post_init(application):
@@ -591,7 +592,6 @@ async def _admin_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE, query, data:
         loop = asyncio.get_running_loop()
         tg = await loop.run_in_executor(None, _ping)
         try:
-            import shutil
             du = subprocess.run(["sh", "-c", "du -sh hist 2>/dev/null | cut -f1"], capture_output=True, text=True, timeout=10).stdout.strip()
         except Exception:
             du = "?"
@@ -666,6 +666,15 @@ async def on_broadcast_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     return True
 
 
+async def on_cancel_bc(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """BUG-4 فیکس: state همیشه پاک می‌شه حتی اگر reply خطا بده (lambda قبلی)."""
+    _BC_STATE.pop(update.effective_user.id, None)
+    try:
+        await update.message.reply_text("✅ ارسال همگانی لغو شد.")
+    except Exception:
+        pass
+
+
 def main():
     """شروع ربات."""
     if not TOKEN:
@@ -678,7 +687,7 @@ def main():
     app.add_handler(CommandHandler("ping", on_ping))  # /ping
     app.add_handler(CommandHandler("start", on_start))  # /start
     app.add_handler(CommandHandler("admin", on_admin))  # 🛠 پنل ادمین (OWNER)
-    app.add_handler(CommandHandler("cancel_bc", lambda u, c: u.message.reply_text("لغو شد.") or _BC_STATE.pop(u.effective_user.id, None)))
+    app.add_handler(CommandHandler("cancel_bc", on_cancel_bc))
     # دکمه‌های ادمین — قبل از هندلر عمومی callback (group=-1 اولویت)
     app.add_handler(CallbackQueryHandler(on_admin_button, pattern="^adm_"))
     app.add_handler(CallbackQueryHandler(on_button_click))  # دکمه‌های Inline

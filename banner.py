@@ -245,7 +245,15 @@ def _area_chart(history, w: int, h: int, up: bool, ohlcv=None, candlestick: bool
 
 
 def _fmt(v) -> str:
-    if isinstance(v, float) and v < 10:
+    """BUG-3 فیکس: قیمت‌های خیلی کوچک (<0.01 مثل SHIB) با 8 رقم دقت — 0.00000521 قبلاً 0.000005 می‌شد."""
+    if isinstance(v, float) and v < 0.01 and v > 0:
+        s = f"{v:,.10f}".rstrip("0").rstrip(".")
+        # حداقل ۸ رقم معنادار بعد از صفرهای پیشرو
+        if len(s.split(".")[-1]) < 8 and "." in s:
+            s = f"{v:,.8f}".rstrip("0")
+            if s.endswith("."):
+                s = s[:-1]
+    elif isinstance(v, float) and v < 10:
         s = f"{v:,.6f}".rstrip("0").rstrip(".")
     elif isinstance(v, float):
         s = f"{v:,.2f}".rstrip("0").rstrip(".")
@@ -500,7 +508,6 @@ def _gold_ingot_logo(size: int = 84) -> Optional[Image.Image]:
     """لوگوی شمش طلای سه‌بعدی با گرادیان — برای کادر آیکون طلا/سکه."""
     s4 = size * 4  # supersample برای لبه‌های نرم
     img = Image.new("RGBA", (s4, s4), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
 
     def lerp(a, b, t):
         return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
@@ -554,7 +561,7 @@ def _gold_ingot_logo(size: int = 84) -> Optional[Image.Image]:
 
 def _gold_lux_bg() -> Image.Image:
     """پس‌زمینه‌ی لوکس طلا — گرادیان تیره گرم + اشعه + bokeh طلایی + وینیت."""
-    import math, random
+    import random
     img = Image.new("RGB", (W, H), (14, 11, 4))
     d = ImageDraw.Draw(img, "RGBA")
     # گرادیان شعاعی مرکز-پایین (طلایی گرم)
@@ -659,7 +666,6 @@ def _draw_shine_sweep(cd, x0, y0, x1, y1, t: float, accent):
 
 def _draw_neon_border(card, cw, ch, t: float, accent):
     """ایده ۴: حاشیه نئون با گرادیان چرخشی. t∈[0,1) فاز. در PNG از t=0 استفاده می‌شه."""
-    import math
     # رنگ چرخشی بین آبی/بنفش/طلایی/سبز
     palette = [(70, 150, 255), (180, 100, 255), (255, 215, 0), (100, 255, 150)]
     n = len(palette)
@@ -683,7 +689,7 @@ def _draw_neon_border(card, cw, ch, t: float, accent):
 
 def _draw_particles(cd, w, h, t: float, accent, seed=1):
     """ایده ۶: ذرات نورانی شناور (بالا می‌رن). t∈[0,1) فاز کلی."""
-    import random, math
+    import random
     rnd = random.Random(seed)
     for _ in range(14):
         px = rnd.randint(20, w - 20)
@@ -734,9 +740,10 @@ def _draw_surge_badge(cd, x, y, accent):
 
 
 def _rollup_digits(img, cx, cy, target, t, unit=""):
-    """ایده ۲: انیمیشن roll-up عدد قیمت (فقط ویدیو). t∈[0,1) پیشرفت."""
+    """ایده ۲: انیمیشن roll-up عدد قیمت (فقط ویدیو). t∈[0,1) پیشرفت.
+    BUG-1 فیکس: برای قیمت‌های اعشاری کوچک (SHIB/PEPE) int() صفر می‌شد → حالا float-safe."""
     eased = 1 - (1 - t) ** 3
-    cur = int(target * eased)
+    cur = target * eased
     d = ImageDraw.Draw(img)
     txt = f"{_fmt(cur)} {unit if unit == 'دلار' else ''}".strip()
     d.text((cx, cy), _rtl(_fa(txt)), font=_font(104, "b"), fill=GOLD_BRIGHT, anchor="mm")
@@ -941,9 +948,6 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
             bd.line([(0, y), (W, y)], fill=c)
         # لوگوی بزرگ‌تر در پس‌زمینه
         try:
-            f_big = _font(420, "b")
-            emoji = {"gold": "🥇", "coin": "🪙", "usdt": "💵"}.get(key or kind, "💰")
-            # PIL ایموجی رنگی ندارد → شکل هندسی
             bd.ellipse((W//2-260, H//2-260, W//2+260, H//2+260), outline=(212, 175, 55), width=6)
             bd.ellipse((W//2-200, H//2-200, W//2+200, H//2+200), outline=(212, 175, 55, 120), width=2)
         except Exception:
@@ -1017,7 +1021,6 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
 
     # --- قیمت اصلی (تایپوگرافی بزرگ‌تر + واحد در چیپ جدا) ---
     f_price = _font(104, "b")
-    price_drawn_y = y  # محل قیمت (برای ویدیو roll-up)
     unit = data["unit"]
     if not omit_price:
         price_txt = f"{_fmt(price)} {unit if unit=='دلار' else ''}".strip()
@@ -1087,7 +1090,6 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
             cap = "روند ۷ روز گذشته (ساعتی) · زنده"
         cd.text((cw // 2, y), _rtl(_fa(cap)), font=f_cap, fill=GRAY, anchor="mm")
         y += 48
-    self_chart_top = y  # y فعلی = محل شروع نمودار (برای ویدیو)
 
     # ۱۹. نوار موقعیت ۲۴ ساعته (اگه high/low داریم) — در بنر ویدیویی نکش (ناحیه‌ی نمودار آزاد بمونه)
     h24 = data.get("high_24")
