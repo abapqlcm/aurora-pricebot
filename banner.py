@@ -23,6 +23,14 @@ GREEN = (46, 204, 113)
 RED = (235, 87, 87)
 CARD_BG = (255, 255, 255, 235)
 
+# ۱. رنگ‌های متغیر بر اساس نوع ارز (Dark Theme + Color Coding)
+COLORS_BY_TYPE = {
+    "fiat": {"bg": (15, 25, 40), "accent": (70, 150, 255), "text": (100, 180, 255)},  # آبی = ارز
+    "gold": {"bg": (40, 35, 15), "accent": (255, 215, 0), "text": (255, 200, 0)},   # طلایی = طلا
+    "crypto": {"bg": (25, 15, 35), "accent": (180, 100, 255), "text": (200, 150, 255)},  # بنفش = کریپتو
+    "stable": {"bg": (20, 35, 25), "accent": (100, 255, 150), "text": (150, 255, 180)},  # سبز = تتر/stable
+}
+
 W, H = 900, 950
 
 
@@ -92,8 +100,8 @@ def _fetch_bg_image(code: str) -> Optional[Image.Image]:
         return None
 
 
-def _blurred_bg(img: Image.Image) -> Image.Image:
-    """پس‌زمینه: cover + blur شدید + تیره‌سازی ملایم."""
+def _blurred_bg(img: Image.Image, color_type: str = "fiat") -> Image.Image:
+    """پس‌زمینه: cover + blur شدید + تم تاریک رنگی."""
     # cover-crop به نسبت W×H
     sw, sh = img.size
     target = W / H
@@ -108,9 +116,13 @@ def _blurred_bg(img: Image.Image) -> Image.Image:
         img = img.crop((0, y0, sw, y0 + nh))
     img = img.resize((W, H), Image.LANCZOS)
     img = img.filter(ImageFilter.GaussianBlur(28))
-    # تیره‌سازی برای خوانایی کارت
-    overlay = Image.new("RGB", (W, H), (10, 10, 14))
-    return Image.blend(img, overlay, 0.45)
+    
+    # ۲. تم تاریک با رنگ‌های متغیر
+    colors = COLORS_BY_TYPE.get(color_type, COLORS_BY_TYPE["fiat"])
+    base_color = colors["bg"]
+    # دارک‌تر: overlay نیمه‌تنیده
+    overlay = Image.new("RGB", (W, H), base_color)
+    return Image.blend(img, overlay, 0.55)  # بیشتر تاریک شدند (۰.۵۵ به‌جای ۰.۴۵)
 
 
 def _smooth(points, steps=None):
