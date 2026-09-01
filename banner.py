@@ -353,27 +353,40 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
             n_frames = int(duration * fps)
             import math
             total = len(smooth_pts)
+            # موقعیت بج LIVE در بنر (کارت: margin 60، icon 28, y-10 → badge در 28+84+14=126, y+24)
+            # توجه: بنر no_chart بج نداره → اینجا هر فریم با pulse بکش (blink واقعی)
+            badge_x = 60 + 28 + 84 + 14
+            badge_y = 50 + 36 + 24
             for f in range(n_frames):
                 t = f / max(1, n_frames - 1)
                 eased = 1 - (1 - t) ** 3
                 img = base_img.copy()
                 d = ImageDraw.Draw(img, "RGBA")
-                # ۱) گرادیان زیر خط — فقط بخش کشیده‌شده
+                # ۰) بج LIVE چشمک‌زن (روی بنر پایه بازکشیده می‌شه)
+                _draw_live_badge(d, badge_x, badge_y, pulse_t=(f / fps) % 1.0)
+                # ۱) گرادیان زیر خط — فقط بخش کشیده‌شده، محدود به کادر نمودار
                 idx_end = max(2, int(2 + (total - 2) * eased))
                 pts = smooth_pts[:idx_end]
                 if len(pts) >= 2:
-                    # گرادیان (نسخه‌ی سبک — ماسک پلی‌گون)
-                    poly = list(pts) + [(pts[-1][0], chart_y0 + chart_h - PAD_B),
-                                        (pts[0][0], chart_y0 + chart_h - PAD_B)]
+                    chart_top = chart_y0
+                    chart_bot = chart_y0 + chart_h - PAD_B
+                    clip = (int(chart_x0), int(chart_top), int(chart_x0 + chart_w), int(chart_bot))
+                    poly = list(pts) + [(pts[-1][0], chart_bot),
+                                        (pts[0][0], chart_bot)]
                     mask = Image.new("L", (w, h), 0)
                     md = ImageDraw.Draw(mask)
                     md.polygon(poly, fill=52)
+                    # clip ماسک به کادر نمودار (بیرون نزنه)
+                    clip_img = Image.new("L", (w, h), 0)
+                    ImageDraw.Draw(clip_img).rectangle(clip, fill=255)
+                    from PIL import ImageChops as _ic
+                    mask = _ic.composite(mask, Image.new("L", (w, h), 0), clip_img)
                     grad = Image.new("RGBA", (w, h), (0, 0, 0, 0))
                     gd4 = ImageDraw.Draw(grad)
-                    yy0 = int(min(p[1] for p in pts))
-                    for yy in range(yy0, int(chart_y0 + chart_h - PAD_B)):
-                        alpha = max(0, int(90 * (1 - (yy - yy0) / max(1, chart_h))))
-                        gd4.line([(0, yy), (w, yy)], fill=line_color + (alpha,))
+                    yy0 = max(int(min(p[1] for p in pts)), int(chart_top))
+                    for yy in range(yy0, int(chart_bot)):
+                        alpha = max(0, int(80 * (1 - (yy - yy0) / max(1, chart_bot - yy0))))
+                        gd4.line([(clip[0], yy), (clip[2], yy)], fill=line_color + (alpha,))
                     img.paste(grad, (0, 0), mask)
                     d2 = ImageDraw.Draw(img, "RGBA")
                     # ۲) گلو + خط smooth (نرم — بدون شکستگی)
@@ -454,12 +467,22 @@ def _draw_24h_range_bar(cd, x0, x1, y, low, high, price, accent):
     cd.text((x0, y + 22), _rtl(_fa(_fmt(low))), font=f_min, fill=GRAY, anchor="la")
 
 
-def _draw_live_badge(cd, x, y):
-    """۲۰. بج LIVE — دایره سبز درخشان + متن."""
-    for r, a in [(9, 70), (6, 150), (4, 255)]:
-        cd.ellipse((x - r, y - r, x + r, y + r), fill=(46, 204, 113, a))
+def _draw_live_badge(cd, x, y, pulse_t: float = 0.0):
+    """۲۰. بج LIVE — دایره سبز درخشان + متن. pulse_t∈[0,1) → حلقه‌ی تپنده (برای ویدیو)."""
+    import math
+    # حلقه‌ی پالس اطراف (فقط وقتی انیمیت می‌شه — ویدیو)
+    if pulse_t > 0:
+        pr = 9 + 7 * (pulse_t % 1.0)
+        pa = int(90 * (1 - (pulse_t % 1.0)))
+        cd.ellipse((x - pr, y - pr, x + pr, y + pr), outline=(46, 204, 113, pa), width=2)
+    # گلو دایره — روشن/خاموش نرم (سینوسی)
+    blink = 0.55 + 0.45 * math.sin(pulse_t * 2 * math.pi) if pulse_t > 0 else 1.0
+    for r, a in [(9, int(70 * blink)), (6, int(150 * blink)), (4, int(200 + 55 * blink))]:
+        cd.ellipse((x - r, y - r, x + r, y + r), fill=(46, 204, 113, min(255, a)))
     f_b = _font(22, "b")
-    cd.text((x + 14, y), "LIVE", font=f_b, fill=(46, 204, 113), anchor="lm")
+    # متن LIVE هم با روشنایی متغیر
+    lv = int(180 + 75 * blink) if pulse_t > 0 else 255
+    cd.text((x + 14, y), "LIVE", font=f_b, fill=(int(46 * lv / 255), int(204 * lv / 255), int(113 * lv / 255)), anchor="lm")
 
 
 def render_market_card() -> Optional[bytes]:
@@ -676,7 +699,8 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
     title = data["name"]
     cd.text((cw - 36, y), _rtl(_fa(title)), font=f_title, fill=WHITE, anchor="ra")
     # ۲۰. بج LIVE گوشه‌ی چپ بالا (کنار آیکون)
-    _draw_live_badge(cd, 28 + 84 + 14, y + 24)
+    if not no_chart:
+        _draw_live_badge(cd, 28 + 84 + 14, y + 24)
 
     # پرچم/آیکون دایره‌ای
     icon_img = _fetch_bg_image(code)
