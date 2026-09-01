@@ -8,7 +8,7 @@ import logging
 import time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import Application, ContextTypes, MessageHandler, CommandHandler, filters
+from telegram.ext import Application, ContextTypes, MessageHandler, CommandHandler, CallbackQueryHandler, filters
 
 import render
 import banner
@@ -229,6 +229,22 @@ async def on_error(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+async def on_button_click(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """هندلر دکمه‌های Inline شروع."""
+    query = update.callback_query
+    await query.answer()  # لود indicator
+    
+    if query.data == "show_crypto":
+        # ۸. بنر کریپتو (محبوب‌ترین)
+        await query.edit_message_text("🪙 کریپتو‌ها: `btc`، `eth`، `sol`، `ton`، `doge`")
+    elif query.data == "show_gold":
+        await query.edit_message_text("🥇 طلا: `طلا`، `طلای ۲۴`، `سکه`، `بهار`")
+    elif query.data == "show_fiat":
+        await query.edit_message_text("💵 ارزها: `دلار`، `یورو`، `پوند`، `درهم`، `لیر`")
+    elif query.data == "help_search":
+        await query.edit_message_text("🔍 جستجو: اسم ارز رو بنویس یا `شماره ارز`")
+
+
 def main():
     """شروع ربات."""
     if not TOKEN:
@@ -240,6 +256,7 @@ def main():
     # Handlers
     app.add_handler(CommandHandler("ping", on_ping))  # /ping
     app.add_handler(CommandHandler("start", on_start))  # /start
+    app.add_handler(CallbackQueryHandler(on_button_click))  # دکمه‌های Inline
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))  # متن عادی
     app.add_error_handler(on_error)
     
