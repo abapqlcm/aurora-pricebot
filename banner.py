@@ -470,19 +470,22 @@ def _draw_24h_range_bar(cd, x0, x1, y, low, high, price, accent):
 def _draw_live_badge(cd, x, y, pulse_t: float = 0.0):
     """۲۰. بج LIVE — دایره سبز درخشان + متن. pulse_t∈[0,1) → حلقه‌ی تپنده (برای ویدیو)."""
     import math
-    # حلقه‌ی پالس اطراف (فقط وقتی انیمیت می‌شه — ویدیو)
     if pulse_t > 0:
-        pr = 9 + 7 * (pulse_t % 1.0)
-        pa = int(90 * (1 - (pulse_t % 1.0)))
+        # blink قوی: 0.15 (نزدیک خاموش) تا 1.0 (کامل روشن) — تداوم نرم سینوسی
+        blink = 0.15 + 0.85 * (0.5 + 0.5 * math.sin(pulse_t * 2 * math.pi))
+        # حلقه‌ی پالس اطراف (ریپل)
+        pr = 9 + 8 * (pulse_t % 1.0)
+        pa = int(110 * (1 - (pulse_t % 1.0)))
         cd.ellipse((x - pr, y - pr, x + pr, y + pr), outline=(46, 204, 113, pa), width=2)
-    # گلو دایره — روشن/خاموش نرم (سینوسی)
-    blink = 0.55 + 0.45 * math.sin(pulse_t * 2 * math.pi) if pulse_t > 0 else 1.0
-    for r, a in [(9, int(70 * blink)), (6, int(150 * blink)), (4, int(200 + 55 * blink))]:
+    else:
+        blink = 1.0
+    for r, a in [(9, int(60 * blink)), (6, int(130 * blink)), (4, int(255 * blink))]:
         cd.ellipse((x - r, y - r, x + r, y + r), fill=(46, 204, 113, min(255, a)))
     f_b = _font(22, "b")
-    # متن LIVE هم با روشنایی متغیر
-    lv = int(180 + 75 * blink) if pulse_t > 0 else 255
-    cd.text((x + 14, y), "LIVE", font=f_b, fill=(int(46 * lv / 255), int(204 * lv / 255), int(113 * lv / 255)), anchor="lm")
+    # متن LIVE هم با روشنایی متغیر (dim تا full)
+    lv = blink if pulse_t > 0 else 1.0
+    cd.text((x + 14, y), "LIVE", font=f_b,
+            fill=(int(46 * lv), int(204 * lv), int(113 * lv)), anchor="lm")
 
 
 def render_market_card() -> Optional[bytes]:
@@ -780,10 +783,10 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
         y += 48
     self_chart_top = y  # y فعلی = محل شروع نمودار (برای ویدیو)
 
-    # ۱۹. نوار موقعیت ۲۴ ساعته (اگه high/low داریم)
+    # ۱۹. نوار موقعیت ۲۴ ساعته (اگه high/low داریم) — در بنر ویدیویی نکش (ناحیه‌ی نمودار آزاد بمونه)
     h24 = data.get("high_24")
     l24 = data.get("low_24")
-    if h24 and l24 and h24 > l24:
+    if h24 and l24 and h24 > l24 and not no_chart:
         _draw_24h_range_bar(cd, 40, cw - 40, y, l24, h24, price, card_outline)
         f_rl = _font(20, "b")
         cd.text((cw // 2, y + 52), _rtl(_fa("موقعیت قیمت در بازه ۲۴ ساعت")),
