@@ -290,17 +290,27 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
     up = (hist[-1] >= hist[0])
     line_color = GREEN if up else RED
 
-    # فریم پایه: بنر کامل (از کش PNG — سریع)
-    base_png = render_banner(code)
+    # پس‌زمینه‌ی بنر **بدون نمودار** (خط static قدیمی حذف) — خط انیمیشنی تنها خطه
+    base_png = render_banner_base_no_chart(code)
     if not base_png:
         return None
     base_img = Image.open(io.BytesIO(base_png)).convert("RGB")
     Wv, Hv = base_img.size
 
-    # ناحیه‌ی نمودار در بنر: card_margin(60)+28, y نمودار ثابت نیست — تشخیص با نسبت
-    # در _render_banner_uncached: y_chart شروع = 36+110+190(+68)+84+... تقریبی: 60% ارتفاع
-    chart_x0, chart_y0 = 60 + 28, int(Hv * 0.42)
-    chart_w, chart_h = Wv - 60 - 28 - 60 - 28, 300
+    # موقعیت دقیق نمودار: بدون no_chart، y بعد از buy/sell chip روی self_chart_top میفته
+    # بازتولید همون محاسبه: y = 36 + 110 (هدر) + 190 (قیمت) + 68/84 (chip) = ثابت‌ها
+    # → مطمئن‌ترین راه: از همون توابع استفاده کن و y_chart رو حساب کن
+    chart_x0 = 60 + 28
+    chart_w = Wv - 60 - 28 - 60 - 28
+    chart_h = 300
+    # y شروع نمودار: هدر(36+110=146) + قیمت(+190=336) + chip(68 اگر buy/sell یا 84 اگر pct)
+    # با no_chart رندر کردیم و y آخرین مقدار — دوباره محاسبه مثل _render_banner_uncached:
+    y_calc = 36 + 110 + 190
+    if data.get("buy") and data.get("sell") and data.get("buy") != data.get("sell"):
+        y_calc += 68
+    elif pct is not None:
+        y_calc += 84
+    chart_y0 = 50 + y_calc  # کارت در (card_margin, 50) کامپوزیت می‌شه
 
     n = len(hist)
     mn, mx = min(hist), max(hist)
@@ -308,8 +318,18 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
         mx = mn * 1.001 + 1
     rng = mx - mn
 
+    PAD_T, PAD_B, PAD_X = 14, 10, 6
+    plot_h = chart_h - PAD_T - PAD_B
+
     def y_of(v):
-        return chart_y0 + chart_h - 10 - (v - mn) / rng * (chart_h - 24)
+        return chart_y0 + PAD_T + plot_h - (v - mn) / rng * plot_h
+
+    # نقاط smooth (همون Catmull-Rom بنر — خط شکسته نمی‌شه)
+    raw_pts = []
+    for i, v in enumerate(hist):
+        x = chart_x0 + PAD_X + i / (n - 1) * (chart_w - 2 * PAD_X)
+        raw_pts.append((x, y_of(v)))
+    smooth_pts = _smooth(raw_pts, steps=12)
 
     # ۲۲. ffmpeg مستقیم با subprocess (imageio writer اینجا فایل خالی می‌سازه)
     # نکته: فریم‌ها با numpy array باعث OOM می‌شن (کپی 900x950×3 × ۴۴ فریم) →
@@ -332,26 +352,39 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
         try:
             n_frames = int(duration * fps)
             import math
+            total = len(smooth_pts)
             for f in range(n_frames):
                 t = f / max(1, n_frames - 1)
                 eased = 1 - (1 - t) ** 3
                 img = base_img.copy()
                 d = ImageDraw.Draw(img, "RGBA")
-                # خط تا پیشرفت eased
-                idx_end = max(2, int(2 + (n - 2) * eased))
-                pts = []
-                for i in range(idx_end):
-                    x = chart_x0 + i / (n - 1) * chart_w
-                    pts.append((x, y_of(hist[i])))
+                # ۱) گرادیان زیر خط — فقط بخش کشیده‌شده
+                idx_end = max(2, int(2 + (total - 2) * eased))
+                pts = smooth_pts[:idx_end]
                 if len(pts) >= 2:
-                    d.line(pts, fill=line_color + (255,), width=4, joint="curve")
-                    # گلو ساده: خط ضخیم کم‌آلفا زیرش
-                    d.line(pts, fill=line_color + (70,), width=10, joint="curve")
-                    # نقطه‌ی سر متحرک با pulse
+                    # گرادیان (نسخه‌ی سبک — ماسک پلی‌گون)
+                    poly = list(pts) + [(pts[-1][0], chart_y0 + chart_h - PAD_B),
+                                        (pts[0][0], chart_y0 + chart_h - PAD_B)]
+                    mask = Image.new("L", (w, h), 0)
+                    md = ImageDraw.Draw(mask)
+                    md.polygon(poly, fill=52)
+                    grad = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+                    gd4 = ImageDraw.Draw(grad)
+                    yy0 = int(min(p[1] for p in pts))
+                    for yy in range(yy0, int(chart_y0 + chart_h - PAD_B)):
+                        alpha = max(0, int(90 * (1 - (yy - yy0) / max(1, chart_h))))
+                        gd4.line([(0, yy), (w, yy)], fill=line_color + (alpha,))
+                    img.paste(grad, (0, 0), mask)
+                    d2 = ImageDraw.Draw(img, "RGBA")
+                    # ۲) گلو + خط smooth (نرم — بدون شکستگی)
+                    d2.line(pts, fill=line_color + (70,), width=10, joint="curve")
+                    d2.line(pts, fill=line_color + (120,), width=6, joint="curve")
+                    d2.line(pts, fill=line_color + (255,), width=4, joint="curve")
+                    # ۳) نقطه‌ی سر متحرک با pulse
                     ex, ey = pts[-1]
                     pr = 6 + 3 * math.sin(f / n_frames * math.pi * 4)
                     for r, a in [(int(pr * 2.2), 60), (int(pr * 1.5), 130), (int(pr), 255)]:
-                        d.ellipse((ex - r, ey - r, ex + r, ey + r), fill=line_color + (a,))
+                        d2.ellipse((ex - r, ey - r, ex + r, ey + r), fill=line_color + (a,))
                 proc.stdin.write(img.tobytes())  # بدون numpy — RSS کم
             proc.stdin.close()
         except BrokenPipeError:
@@ -551,8 +584,18 @@ def render_banner(code: str) -> Optional[bytes]:
         return _render_banner_uncached(code, ck, now)
 
 
-def _render_banner_uncached(code: str, ck: str, now: float) -> Optional[bytes]:
-    """رندر واقعی بنر — فقط از render_banner صدا زده شه (lock گرفته شده)."""
+def render_banner_base_no_chart(code: str) -> Optional[bytes]:
+    """بنر کامل بدون نمودار (پس‌زمینه‌ی ویدیوی انیمیشنی) — بدون کش (بلافاصله مصرف می‌شه)."""
+    import time
+    ck = catalog.resolve(code) or code
+    with _RENDER_LOCK:
+        now = time.time()
+        return _render_banner_uncached(code, ck, now, no_chart=True)
+
+
+def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = False) -> Optional[bytes]:
+    """رندر واقعی بنر — فقط از render_banner صدا زده شه (lock گرفته شده).
+    no_chart=True → بنر بدون نمودار (برای پس‌زمینه‌ی ویدیوی انیمیشنی)."""
     data = datafeeds.get_banner_data(code)
     if not data or not data.get("price"):
         return None
@@ -698,7 +741,7 @@ def _render_banner_uncached(code: str, ck: str, now: float) -> Optional[bytes]:
 
     # --- نمودار ---
     chart_h = 300
-    if len(hist) >= 3:
+    if len(hist) >= 3 and not no_chart:
         up = (hist[-1] >= hist[0])
         chart = _area_chart(hist, cw - 56, chart_h, up, ohlcv=data.get("ohlcv"))
         card.paste(chart, (28, y), chart)
@@ -711,6 +754,7 @@ def _render_banner_uncached(code: str, ck: str, now: float) -> Optional[bytes]:
             cap = "روند ۷ روز گذشته (ساعتی) · زنده"
         cd.text((cw // 2, y), _rtl(_fa(cap)), font=f_cap, fill=GRAY, anchor="mm")
         y += 48
+    self_chart_top = y  # y فعلی = محل شروع نمودار (برای ویدیو)
 
     # ۱۹. نوار موقعیت ۲۴ ساعته (اگه high/low داریم)
     h24 = data.get("high_24")
@@ -763,5 +807,8 @@ def _render_banner_uncached(code: str, ck: str, now: float) -> Optional[bytes]:
 
     buf = io.BytesIO()
     out.convert("RGB").save(buf, "PNG")
+    if no_chart:
+        # بنر ویدیویی کش نمی‌شه (موقته) — فقط برگرد
+        return buf.getvalue()
     _PNG_CACHE[ck] = (now, buf.getvalue())
     return _PNG_CACHE[ck][1]
