@@ -8,7 +8,7 @@ import logging
 import time
 import threading
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 from telegram.ext import Application, ContextTypes, MessageHandler, CommandHandler, CallbackQueryHandler, filters
 
 import render
@@ -175,51 +175,9 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         loop = asyncio.get_running_loop()
         
         if kind == "single":
-            # اسم ارز تک — بنر + کپشن زنده در یک پیام
+            # اسم ارز تک — بنر + کپشن + دکمه‌های کارت انتقالی
             key = data
-            d = await loop.run_in_executor(None, datafeeds.get_banner_data, key)
-            png = await loop.run_in_executor(None, banner.render_banner, key)
-            if png and d:
-                unit = d.get("unit", "تومان")
-                price = d.get("price") or 0
-                pct = d.get("change_pct") or 0
-                
-                if unit == "تومان" and key != "usdt":
-                    # فیات/طلا/سکه (نه تتر)
-                    cap = (
-                        f"⭐️ 1 {d['name']} = <b>{render.fmt_num(price)}</b>\n"
-                        f"<b>{pct:+.2f}%</b>\n"
-                        f"🕐 Update: {render._now_en()}"
-                    )
-                else:
-                    # کریپتو یا تتر: قیمت + درصد + محدوده High/Low (24h)
-                    ohlcv = d.get("ohlcv", [])
-                    high_24 = max(x[1] for x in ohlcv) if ohlcv else price
-                    low_24 = min(x[2] for x in ohlcv) if ohlcv else price
-                    
-                    # برای تتر: نمایش به تومان
-                    if unit == "تومان" and key == "usdt":
-                        cap = (
-                            f"⭐️ 1 {d['name']} = <b>{render.fmt_num(int(price))}</b>\n"
-                            f"<b>{pct:+.2f}%</b>\n"
-                            f"\n📊 <b>24H High & Low:</b>\n"
-                            f"<blockquote>🔼 High: {render.fmt_num(int(high_24))}\n"
-                            f"🔽 Low: {render.fmt_num(int(low_24))}</blockquote>\n"
-                            f"\n🕐 Update: {render._now_en()}"
-                        )
-                    else:
-                        # دیگر کریپتوها: USD
-                        cap = (
-                            f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
-                            f"<b>{pct:+.2f}%</b>\n"
-                            f"\n📊 <b>24H High & Low:</b>\n"
-                            f"<blockquote>🔼 High: ${render.fmt_num(high_24)}\n"
-                            f"🔽 Low: ${render.fmt_num(low_24)}</blockquote>\n"
-                            f"\n🕐 Update: {render._now_en()}"
-                        )
-                await update.message.reply_photo(png, caption=cap, parse_mode="HTML")
-            else:
-                await update.message.reply_text(f"❌ نتونستم قیمت {key} رو بگیرم.")
+            await send_price_card(update, key, edit=False)
             # دیتای بعدی از قبل آماده شه
             await _prefetch(ctx, ["dollar", "BTC", "gold_18", "usdt", "euro"])
         
@@ -255,6 +213,83 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
 
 
+# ۱۵. کارت انتقالی — چرخه ارزهای محبوب برای دکمه‌های ◀️ ▶️
+CAROUSEL = ["dollar", "euro", "pound", "usdt", "BTC", "ETH", "gold_18"]
+
+
+def _carousel_kb(current: str):
+    """دکمه‌های ◀️ ▶️ برای ورق‌زدن کارت‌ها."""
+    try:
+        i = CAROUSEL.index(current)
+    except ValueError:
+        i = 0
+    prev = CAROUSEL[(i - 1) % len(CAROUSEL)]
+    nxt = CAROUSEL[(i + 1) % len(CAROUSEL)]
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("◀️", callback_data=f"card:{prev}"),
+        InlineKeyboardButton(f"{i + 1}/{len(CAROUSEL)}", callback_data="card:noop"),
+        InlineKeyboardButton("▶️", callback_data=f"card:{nxt}"),
+    ]])
+
+
+async def send_price_card(update_or_query, key: str, edit=False):
+    """بنر + کپشن + دکمه‌های ورق‌زدن — برای پیام جدید یا ویرایش (transition)."""
+    import asyncio
+    loop = asyncio.get_running_loop()
+    d = await loop.run_in_executor(None, datafeeds.get_banner_data, key)
+    png = await loop.run_in_executor(None, banner.render_banner, key)
+    if not png or not d:
+        msg = f"❌ نتونستم قیمت {key} رو بگیرم."
+        if edit and hasattr(update_or_query, "edit_message_text"):
+            await update_or_query.edit_message_text(msg)
+        else:
+            await update_or_query.message.reply_text(msg)
+        return
+    unit = d.get("unit", "تومان")
+    price = d.get("price") or 0
+    pct = d.get("change_pct") or 0
+    if unit == "تومان" and key != "usdt":
+        cap = (
+            f"⭐️ 1 {d['name']} = <b>{render.fmt_num(price)}</b>\n"
+            f"<b>{pct:+.2f}%</b>\n"
+            f"🕐 Update: {render._now_en()}"
+        )
+    elif unit == "تومان" and key == "usdt":
+        ohlcv = d.get("ohlcv", [])
+        high_24 = max(x[1] for x in ohlcv) if ohlcv else price
+        low_24 = min(x[2] for x in ohlcv) if ohlcv else price
+        cap = (
+            f"⭐️ 1 {d['name']} = <b>{render.fmt_num(int(price))}</b>\n"
+            f"<b>{pct:+.2f}%</b>\n"
+            f"\n📊 <b>24H High & Low:</b>\n"
+            f"<blockquote>🔼 High: {render.fmt_num(int(high_24))}\n"
+            f"🔽 Low: {render.fmt_num(int(low_24))}</blockquote>\n"
+            f"\n🕐 Update: {render._now_en()}"
+        )
+    else:
+        ohlcv = d.get("ohlcv", [])
+        high_24 = max(x[1] for x in ohlcv) if ohlcv else price
+        low_24 = min(x[2] for x in ohlcv) if ohlcv else price
+        cap = (
+            f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
+            f"<b>{pct:+.2f}%</b>\n"
+            f"\n📊 <b>24H High & Low:</b>\n"
+            f"<blockquote>🔼 High: ${render.fmt_num(high_24)}\n"
+            f"🔽 Low: ${render.fmt_num(low_24)}</blockquote>\n"
+            f"\n🕐 Update: {render._now_en()}"
+        )
+    kb = _carousel_kb(key)
+    if edit:
+        try:
+            media = InputMediaPhoto(png, caption=cap, parse_mode="HTML")
+            await update_or_query.edit_message_media(media=media, reply_markup=kb)
+        except Exception:
+            # fallback: پیام جدید اگه ویرایش ممکن نبود
+            await update_or_query.message.reply_photo(png, caption=cap, parse_mode="HTML", reply_markup=kb)
+    else:
+        await update_or_query.message.reply_photo(png, caption=cap, parse_mode="HTML", reply_markup=kb)
+
+
 async def on_error(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """هر خطایی لاگ بشه + به کاربر بگم."""
     err = ctx.error
@@ -269,17 +304,35 @@ async def on_error(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def on_button_click(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """هندلر دکمه‌های Inline شروع."""
+    """هندلر دکمه‌های Inline شروع + کارت انتقالی ◀️ ▶️."""
     query = update.callback_query
+    
+    # ۱۵. کارت انتقالی — ورق‌زدن کارت‌ها بدون پیام جدید
+    if query.data and query.data.startswith("card:"):
+        key = query.data[5:]
+        if key == "noop":
+            await query.answer()
+            return
+        await query.answer()  # لود indicator سریع
+        try:
+            await send_price_card(query, key, edit=True)
+        except Exception as e:
+            log.error("carousel edit: %s", e)
+            try:
+                await query.answer("⚠️ خطا — دوباره تلاش کن", show_alert=False)
+            except Exception:
+                pass
+        return
+    
     await query.answer()  # لود indicator
     
     if query.data == "show_crypto":
-        # ۸. بنر کریپتو (محبوب‌ترین)
-        await query.edit_message_text("🪙 کریپتو‌ها: `btc`، `eth`، `sol`، `ton`، `doge`")
+        # بنر کریپتو (محبوب‌ترین) — با کارت انتقالی
+        await send_price_card(query, "BTC", edit=True)
     elif query.data == "show_gold":
-        await query.edit_message_text("🥇 طلا: `طلا`، `طلای ۲۴`، `سکه`، `بهار`")
+        await send_price_card(query, "gold_18", edit=True)
     elif query.data == "show_fiat":
-        await query.edit_message_text("💵 ارزها: `دلار`، `یورو`، `پوند`، `درهم`، `لیر`")
+        await send_price_card(query, "dollar", edit=True)
     elif query.data == "help_search":
         await query.edit_message_text("🔍 جستجو: اسم ارز رو بنویس یا `شماره ارز`")
 
