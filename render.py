@@ -131,6 +131,10 @@ def parse_input(text: str) -> Tuple[Optional[str], Any]:
     if len(words) > 3:
         return (None, None)  # جمله طولانی → خاموش
 
+    # ۱۰. دستور «بازار» — کارت گرید بازار امروز
+    if tc_clean in ("بازار", "market", "بازار امروز", "امروز"):
+        return ("market", None)
+
     # شماره + ارز
     nums = re.findall(r"[\d]+(?:[.,]\d+)?", t)
     text_no_nums = re.sub(r"[\d]+(?:[.,]\d+)?", "", t).strip()

@@ -177,9 +177,32 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if kind == "single":
             # اسم ارز تک — بنر + کپشن + دکمه‌های کارت انتقالی
             key = data
-            await send_price_card(update, key, edit=False)
+            # ۵. ویدیو (نمودار متحرک) — اول امتحان کن، فیلد شد PNG
+            import asyncio as _aio
+            loop2 = _aio.get_running_loop()
+            vid = await loop2.run_in_executor(None, banner.render_banner_video, key)
+            if vid:
+                d0 = await loop2.run_in_executor(None, datafeeds.get_banner_data, key)
+                await update.message.reply_video(
+                    vid,
+                    caption=_caption_for(key, d0),
+                    parse_mode="HTML",
+                    reply_markup=_carousel_kb(key),
+                    supports_streaming=True,
+                )
+            else:
+                await send_price_card(update, key, edit=False)
             # دیتای بعدی از قبل آماده شه
             await _prefetch(ctx, ["dollar", "BTC", "gold_18", "usdt", "euro"])
+
+        elif kind == "market":
+            # ۱۰. کارت «بازار امروز» — گرید چند ارز
+            loop_m = _aio.get_running_loop()
+            mpng = await loop_m.run_in_executor(None, banner.render_market_card)
+            if mpng:
+                await update.message.reply_photo(mpng, caption="📊 <b>بازار امروز</b> — برگ برنده‌ها، طلای روز و کریپتو", parse_mode="HTML")
+            else:
+                await update.message.reply_text("❌ دیتای بازار در دسترس نیست.")
         
         elif kind == "calc":
             # محاسبه: amount × ارز — بنر + کپشن (همه در یک پیام)
@@ -232,6 +255,44 @@ def _carousel_kb(current: str):
     ]])
 
 
+def _caption_for(key: str, d: dict | None) -> str:
+    """کپشن مشترک برای ویدیو/بنر."""
+    if not d:
+        return "⭐️ AuroraPriceBot"
+    unit = d.get("unit", "تومان")
+    price = d.get("price") or 0
+    pct = d.get("change_pct") or 0
+    if unit != "تومان":
+        ohlcv = d.get("ohlcv", [])
+        high_24 = max(x[1] for x in ohlcv) if ohlcv else price
+        low_24 = min(x[2] for x in ohlcv) if ohlcv else price
+        return (
+            f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
+            f"<b>{pct:+.2f}%</b>\n"
+            f"\n📊 <b>24H High & Low:</b>\n"
+            f"<blockquote>🔼 High: ${render.fmt_num(high_24)}\n"
+            f"🔽 Low: ${render.fmt_num(low_24)}</blockquote>\n"
+            f"\n🕐 Update: {render._now_en()}"
+        )
+    if key == "usdt":
+        ohlcv = d.get("ohlcv", [])
+        high_24 = max(x[1] for x in ohlcv) if ohlcv else price
+        low_24 = min(x[2] for x in ohlcv) if ohlcv else price
+        return (
+            f"⭐️ 1 {d['name']} = <b>{render.fmt_num(int(price))}</b>\n"
+            f"<b>{pct:+.2f}%</b>\n"
+            f"\n📊 <b>24H High & Low:</b>\n"
+            f"<blockquote>🔼 High: {render.fmt_num(int(high_24))}\n"
+            f"🔽 Low: {render.fmt_num(int(low_24))}</blockquote>\n"
+            f"\n🕐 Update: {render._now_en()}"
+        )
+    return (
+        f"⭐️ 1 {d['name']} = <b>{render.fmt_num(price)}</b>\n"
+        f"<b>{pct:+.2f}%</b>\n"
+        f"🕐 Update: {render._now_en()}"
+    )
+
+
 async def send_price_card(update_or_query, key: str, edit=False):
     """بنر + کپشن + دکمه‌های ورق‌زدن — برای پیام جدید یا ویرایش (transition)."""
     import asyncio
@@ -245,39 +306,7 @@ async def send_price_card(update_or_query, key: str, edit=False):
         else:
             await update_or_query.message.reply_text(msg)
         return
-    unit = d.get("unit", "تومان")
-    price = d.get("price") or 0
-    pct = d.get("change_pct") or 0
-    if unit == "تومان" and key != "usdt":
-        cap = (
-            f"⭐️ 1 {d['name']} = <b>{render.fmt_num(price)}</b>\n"
-            f"<b>{pct:+.2f}%</b>\n"
-            f"🕐 Update: {render._now_en()}"
-        )
-    elif unit == "تومان" and key == "usdt":
-        ohlcv = d.get("ohlcv", [])
-        high_24 = max(x[1] for x in ohlcv) if ohlcv else price
-        low_24 = min(x[2] for x in ohlcv) if ohlcv else price
-        cap = (
-            f"⭐️ 1 {d['name']} = <b>{render.fmt_num(int(price))}</b>\n"
-            f"<b>{pct:+.2f}%</b>\n"
-            f"\n📊 <b>24H High & Low:</b>\n"
-            f"<blockquote>🔼 High: {render.fmt_num(int(high_24))}\n"
-            f"🔽 Low: {render.fmt_num(int(low_24))}</blockquote>\n"
-            f"\n🕐 Update: {render._now_en()}"
-        )
-    else:
-        ohlcv = d.get("ohlcv", [])
-        high_24 = max(x[1] for x in ohlcv) if ohlcv else price
-        low_24 = min(x[2] for x in ohlcv) if ohlcv else price
-        cap = (
-            f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
-            f"<b>{pct:+.2f}%</b>\n"
-            f"\n📊 <b>24H High & Low:</b>\n"
-            f"<blockquote>🔼 High: ${render.fmt_num(high_24)}\n"
-            f"🔽 Low: ${render.fmt_num(low_24)}</blockquote>\n"
-            f"\n🕐 Update: {render._now_en()}"
-        )
+    cap = _caption_for(key, d)
     kb = _carousel_kb(key)
     if edit:
         try:

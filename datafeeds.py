@@ -223,6 +223,7 @@ def get_banner_data(code: str) -> Optional[dict]:
             return {
                 "name": name, "price": al["sell"], "change_pct": None,
                 "change_abs": None,
+                "buy": al["buy"], "sell": al["sell"],  # ۱۶. بازه خرید/فروش برای بنر
                 "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
                 "unit": "تومان", "source": "Alanchand (بازار روز)",
             }
@@ -291,10 +292,11 @@ def get_banner_data(code: str) -> Optional[dict]:
             except:
                 high_24 = low_24 = last
                 ohlcv = []
-            
+
             return {
                 "name": name, "price": round(last), "change_pct": ch,
                 "change_abs": None,
+                "high_24": high_24, "low_24": low_24,  # ۱۷. برای نوار موقعیت ۲۴س
                 "history": [x / 10 for x in tgju_history(tg_id)],
                 "ohlcv": ohlcv,
                 "unit": "تومان", "source": "Wallex (لایو)",
@@ -322,13 +324,49 @@ def get_banner_data(code: str) -> Optional[dict]:
         ch_abs = price_usd - p_24
         if pct is None:
             pct = round((price_usd - p_24) / p_24 * 100, 2)
+        # ۱۷. high/low واقعی ۲۴h از کندل‌های ۱۵ دقیقه‌ای اخیر (۹۶ کندل = ۲۴ ساعت)
+        h24 = ohlcv[-96:] if len(ohlcv) >= 96 else ohlcv
+        high_24 = max(x[1] for x in h24)
+        low_24 = min(x[2] for x in h24)
         return {
             "name": name, "price": price_usd, "change_pct": pct,
             "change_abs": ch_abs, "history": klines, "ohlcv": ohlcv,
+            "high_24": high_24, "low_24": low_24,  # برای نوار موقعیت ۲۴س
             "unit": "دلار", "source": "Binance",
         }
 
     return None
+
+
+# ۱۸. کارت «بازار امروز» — گرید چند ارز + بیشترین رشد/افت
+MARKET_KEYS = ["dollar", "euro", "pound", "usdt", "gold_18", "coin_emami", "BTC", "ETH"]
+
+
+def market_overview() -> dict:
+    """دیتای خلاصه برای کارت بازار: قیمت + ٪تغییر هر ارز محبوب.
+    خروجی: {"rows": [(name, price, pct, unit)], "top": (name,pct)|None, "bottom": (name,pct)|None}
+    """
+    rows = []
+    for k in MARKET_KEYS:
+        try:
+            d = get_banner_data(k)
+        except Exception:
+            d = None
+        if not d or not d.get("price"):
+            continue
+        rows.append({
+            "key": k, "name": d["name"], "price": d["price"],
+            "pct": d.get("change_pct"), "unit": d.get("unit", "تومان"),
+        })
+    top = bottom = None
+    with_pct = [r for r in rows if r["pct"] is not None]
+    if with_pct:
+        sorted_r = sorted(with_pct, key=lambda r: r["pct"], reverse=True)
+        if sorted_r[0]["pct"] > 0:
+            top = (sorted_r[0]["name"], sorted_r[0]["pct"])
+        if sorted_r[-1]["pct"] < 0:
+            bottom = (sorted_r[-1]["name"], sorted_r[-1]["pct"])
+    return {"rows": rows, "top": top, "bottom": bottom}
 
 
 # ---------------- Local minute history (self-recorded) ----------------
