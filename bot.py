@@ -104,9 +104,31 @@ async def _prefetch(ctx: ContextTypes.DEFAULT_TYPE, keys: list):
         for k in keys:
             try:
                 datafeeds.get_banner_data(k)
+                banner.render_banner(k)
             except Exception:
                 pass
     asyncio.get_running_loop().run_in_executor(None, _job)
+
+
+HOT_KEYS = ["dollar", "euro", "BTC", "usdt", "gold_18", "pound", "try", "aed", "SOL", "ETH"]
+
+
+async def _warm_loop(ctx: ContextTypes.DEFAULT_TYPE):
+    """هر ۱۰ ثانیه ارزهای محبوب رو از قبل رندر می‌کنه — جواب کاربر همیشه <1s."""
+    import asyncio
+    while True:
+        try:
+            def _job():
+                for k in HOT_KEYS:
+                    try:
+                        datafeeds.get_banner_data(k)
+                        banner.render_banner(k)
+                    except Exception:
+                        pass
+            await asyncio.get_running_loop().run_in_executor(None, _job)
+        except Exception as e:
+            log.warning("warm loop: %s", e)
+        await asyncio.sleep(10)
 
 
 async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -135,11 +157,15 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         # فقط اگه ورودی معتبره: جواب (بدون typing indicator — Telegram خودش عکس رو نشون می‌ده)
         log.info(f"valid input, sending")
         
+        # ۱۰. fetch+render در thread جدا — event loop بلاک نشه (سرعت)
+        import asyncio
+        loop = asyncio.get_running_loop()
+        
         if kind == "single":
             # اسم ارز تک — بنر + کپشن زنده در یک پیام
             key = data
-            d = datafeeds.get_banner_data(key)
-            png = banner.render_banner(key)
+            d = await loop.run_in_executor(None, datafeeds.get_banner_data, key)
+            png = await loop.run_in_executor(None, banner.render_banner, key)
             if png and d:
                 unit = d.get("unit", "تومان")
                 price = d.get("price") or 0
@@ -187,8 +213,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         elif kind == "calc":
             # محاسبه: amount × ارز — بنر + کپشن (همه در یک پیام)
             key, amount = data
-            d = datafeeds.get_banner_data(key)
-            png = banner.render_banner(key)
+            d = await loop.run_in_executor(None, datafeeds.get_banner_data, key)
+            png = await loop.run_in_executor(None, banner.render_banner, key)
             if png and d:
                 unit = d.get("unit", "تومان")
                 price = d.get("price") or 0
@@ -245,13 +271,18 @@ async def on_button_click(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🔍 جستجو: اسم ارز رو بنویس یا `شماره ارز`")
 
 
+async def _post_init(application):
+    """بعد از استارت: warm loop رو بنداز تو پس‌زمینه."""
+    application.create_task(_warm_loop(application))
+
+
 def main():
     """شروع ربات."""
     if not TOKEN:
         print("❌ BOT_TOKEN ست نشده.")
         raise SystemExit(1)
     
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).post_init(_post_init).concurrent_updates(True).build()
     
     # Handlers
     app.add_handler(CommandHandler("ping", on_ping))  # /ping
@@ -260,7 +291,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))  # متن عادی
     app.add_error_handler(on_error)
     
-    log.info("🚀 AuroraPriceBot v5 started (conversational)")
+    log.info("🚀 AuroraPriceBot v6 started (fast warm-cache)")
     app.run_polling()
 
 
