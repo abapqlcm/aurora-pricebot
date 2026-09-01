@@ -362,8 +362,8 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
                 eased = 1 - (1 - t) ** 3
                 img = base_img.copy()
                 d = ImageDraw.Draw(img, "RGBA")
-                # ۰) بج LIVE چشمک‌زن (روی بنر پایه بازکشیده می‌شه)
-                _draw_live_badge(d, badge_x, badge_y, pulse_t=(f / fps) % 1.0)
+                # ۰) بج LIVE چشمک‌زن — دوره‌ی ۲.۴s نرم (بجای ۱s تند)
+                _draw_live_badge(d, badge_x, badge_y, pulse_t=(f / (fps * 2.4)) % 1.0)
                 # ۱) گرادیان زیر خط — فقط بخش کشیده‌شده، محدود به کادر نمودار
                 idx_end = max(2, int(2 + (total - 2) * eased))
                 pts = smooth_pts[:idx_end]
@@ -468,15 +468,12 @@ def _draw_24h_range_bar(cd, x0, x1, y, low, high, price, accent):
 
 
 def _draw_live_badge(cd, x, y, pulse_t: float = 0.0):
-    """۲۰. بج LIVE — دایره سبز درخشان + متن. pulse_t∈[0,1) → حلقه‌ی تپنده (برای ویدیو)."""
+    """۲۰. بج LIVE — دایره سبز درخشان + متن. pulse_t∈[0,1) → حلقه‌ی تپنده (برای ویدیو).
+    دوره‌ی کامل ۲.۴ ثانیه (نرم مثل پخش زنده — بدون تپش تند)."""
     import math
     if pulse_t > 0:
-        # blink قوی: 0.15 (نزدیک خاموش) تا 1.0 (کامل روشن) — تداوم نرم سینوسی
-        blink = 0.15 + 0.85 * (0.5 + 0.5 * math.sin(pulse_t * 2 * math.pi))
-        # حلقه‌ی پالس اطراف (ریپل)
-        pr = 9 + 8 * (pulse_t % 1.0)
-        pa = int(110 * (1 - (pulse_t % 1.0)))
-        cd.ellipse((x - pr, y - pr, x + pr, y + pr), outline=(46, 204, 113, pa), width=2)
+        # sine آروم: 0.3 (dim) تا 1.0 (روشن) — بدون تیزی
+        blink = 0.3 + 0.7 * (0.5 + 0.5 * math.sin(pulse_t * 2 * math.pi))
     else:
         blink = 1.0
     for r, a in [(9, int(60 * blink)), (6, int(130 * blink)), (4, int(255 * blink))]:
@@ -798,18 +795,7 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
     out.alpha_composite(card, (card_margin, 50))
 
     od = ImageDraw.Draw(out)
-    # ۷. بج منبع — پایین چپ کارت
-    src = data.get("source", "")
-    if src:
-        f_src = _font(20, "b")
-        try:
-            src_txt = _rtl(_fa(src))
-        except Exception:
-            src_txt = src
-        od.rounded_rectangle((card_margin + 24, H - 110, card_margin + 24 + 320, H - 70),
-                             radius=20, fill=(0, 0, 0, 130), outline=colors["accent"] + (150,), width=1)
-        od.text((card_margin + 24 + 160, H - 90), src_txt, font=f_src,
-                fill=(220, 220, 228), anchor="mm")
+    # (بج منبع حذف شد — کاربر نخواست)
 
     # ۸. لوگوی دایره‌ای گوشه‌ی پایین راست (بجای واترمارک متنی)
     try:
