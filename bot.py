@@ -201,9 +201,14 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             if vid:
                 d0 = await loop2.run_in_executor(None, datafeeds.get_banner_data, key)
                 # ۲۳. حالت GIF: reply_animation — اتوپلی + لوپ بی‌نهایت (بدون دکمه‌ی پخش)
+                # نکته: با bytes خام باید filename بدیم وگرنه تلگرام application/octet-stream نشون می‌ده!
                 try:
                     await update.message.reply_animation(
                         vid,
+                        filename="aurora_banner.mp4",
+                        duration=2,
+                        width=900,
+                        height=950,
                         caption=_caption_for(key, d0),
                         parse_mode="HTML",
                         reply_markup=_carousel_kb(key),
@@ -212,6 +217,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     log.warning("animation send failed (%s) → video fallback", e_anim)
                     await update.message.reply_video(
                         vid,
+                        filename="aurora_banner.mp4",
                         caption=_caption_for(key, d0),
                         parse_mode="HTML",
                         reply_markup=_carousel_kb(key),
