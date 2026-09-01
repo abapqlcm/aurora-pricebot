@@ -400,11 +400,7 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
                     log.warning("neon border frame: %s", e_nb)
                 # ۰) بج LIVE چشمک‌زن — دوره‌ی ۲.۴s نرم (بجای ۱s تند)
                 _draw_live_badge(d, badge_x, badge_y, pulse_t=(f / (fps * 2.4)) % 1.0)
-                # ایده ۶: ذرات نورانی شناور
-                try:
-                    _draw_particles(d, w, h, t, accent_color, seed=42)
-                except Exception as e_p:
-                    log.warning("particles frame: %s", e_p)
+                # (پارتیکل‌ها حذف شد — کاربر: حالت فیک می‌ده)
                 # ایده ۲: roll-up قیمت — ۴۰٪ اول انیمیت، بعد ثابت
                 try:
                     _rollup_digits(img, w // 2, 50 + 36 + 110 + 56, data["price"],
