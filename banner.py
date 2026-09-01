@@ -360,9 +360,18 @@ def _render_banner_uncached(code: str, ck: str, now: float) -> Optional[bytes]:
     colors = COLORS_BY_TYPE.get(asset_type, COLORS_BY_TYPE["fiat"])
     card_outline = colors["accent"]  # حاشیه رنگی
     
-    # کارت نیمه‌شفاف + حاشیه رنگی (نه طلایی)
-    cd.rounded_rectangle((0, 0, cw - 1, ch - 1), radius=36, fill=(20, 20, 28, 216),
+    # کارت نیمه‌شفاف + حاشیه رنگی — گلاس‌مورفیسم واقعی (شفاف‌تر)
+    cd.rounded_rectangle((0, 0, cw - 1, ch - 1), radius=36, fill=(16, 16, 24, 178),
                          outline=card_outline + (200,), width=3)  # width=3 برای نیون
+    
+    # ۱۴. نیون گلو — هاله‌ی نور دور کارت (چند لایه outline محو)
+    glow_layer = Image.new("RGBA", card.size, (0, 0, 0, 0))
+    gd3 = ImageDraw.Draw(glow_layer)
+    for gw, ga in [(10, 40), (6, 70), (3, 110)]:
+        gd3.rounded_rectangle((-gw // 2, -gw // 2, cw - 1 + gw // 2, ch - 1 + gw // 2),
+                              radius=36 + gw // 2, outline=card_outline + (ga,), width=gw)
+    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(6))
+    card.alpha_composite(glow_layer)
 
     y = 36
     # --- عنوان + پرچم ---
