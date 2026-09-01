@@ -465,6 +465,117 @@ def _asset_type(code: str) -> str:
     return "fiat"
 
 
+def _gold_ingot_logo(size: int = 84) -> Optional[Image.Image]:
+    """لوگوی شمش طلای سه‌بعدی با گرادیان — برای کادر آیکون طلا/سکه."""
+    s4 = size * 4  # supersample برای لبه‌های نرم
+    img = Image.new("RGBA", (s4, s4), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+
+    def lerp(a, b, t):
+        return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+    top_c, mid_c, bot_c = (255, 236, 150), (250, 200, 60), (176, 128, 20)
+
+    # بدنه‌ی شمش — ذوزنقه با گرادیان عمودی
+    m = s4 * 0.14          # حاشیه
+    th = s4 * 0.46         # ارتفاع بدنه
+    top_in = s4 * 0.09     # فرو رفتن بالای ذوزنقه
+    bx0, by0 = m, s4 * 0.30
+    bx1, by1 = s4 - m, by0 + th
+    body = Image.new("RGBA", (s4, s4), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(body)
+    bd.polygon([(bx0 + top_in, by0), (bx1 - top_in, by0), (bx1, by1), (bx0, by1)],
+               fill=(255, 255, 255, 255))
+    grad = Image.new("RGBA", (s4, s4), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(grad)
+    for yy in range(int(by0), int(by1) + 1):
+        t = (yy - by0) / max(1, th)
+        c = lerp(top_c, bot_c, t) if t < 0.55 else lerp(mid_c, bot_c, (t - 0.55) / 0.45)
+        gd.line([(0, yy), (s4, yy)], fill=c + (255,))
+    img.paste(grad, (0, 0), body)
+
+    # براقیت بالای شمش (هایلایت)
+    hl = Image.new("RGBA", (s4, s4), (0, 0, 0, 0))
+    hd = ImageDraw.Draw(hl)
+    hd.polygon([(bx0 + top_in + s4 * 0.05, by0 + s4 * 0.02),
+                (bx1 - top_in - s4 * 0.05, by0 + s4 * 0.02),
+                (bx1 - s4 * 0.16, by0 + th * 0.42),
+                (bx0 + s4 * 0.16, by0 + th * 0.42)],
+               fill=(255, 255, 255, 90))
+    img = Image.alpha_composite(img, hl)
+
+    # لبه‌ی پایین سایه
+    sd = ImageDraw.Draw(img)
+    sd.polygon([(bx0, by1), (bx1, by1), (bx1 - s4 * 0.03, by1 + s4 * 0.035),
+                (bx0 + s4 * 0.03, by1 + s4 * 0.035)],
+               fill=(120, 85, 10, 200))
+
+    # درخشش دور شمش
+    glow = Image.new("RGBA", (s4, s4), (0, 0, 0, 0))
+    gld = ImageDraw.Draw(glow)
+    gld.polygon([(bx0 + top_in, by0), (bx1 - top_in, by0), (bx1, by1), (bx0, by1)],
+                outline=(255, 215, 0, 160), width=s4 // 28)
+    glow = glow.filter(ImageFilter.GaussianBlur(s4 / 22))
+    img = Image.alpha_composite(glow, img)
+
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def _gold_lux_bg() -> Image.Image:
+    """پس‌زمینه‌ی لوکس طلا — گرادیان تیره گرم + اشعه + bokeh طلایی + وینیت."""
+    import math, random
+    img = Image.new("RGB", (W, H), (14, 11, 4))
+    d = ImageDraw.Draw(img, "RGBA")
+    # گرادیان شعاعی مرکز-پایین (طلایی گرم)
+    cx, cy = W // 2, int(H * 0.62)
+    maxr = int((W ** 2 + H ** 2) ** 0.5 / 2)
+    for r in range(maxr, 0, -12):
+        t = r / maxr
+        a = int(38 * (1 - t))
+        d.ellipse((cx - r, cy - int(r * 1.15), cx + r, cy + int(r * 1.15)),
+                  fill=(60, 44, 8, a))
+    # اشعه‌های مورب ملایم
+    ray = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    rd = ImageDraw.Draw(ray)
+    rnd = random.Random(7)
+    for i in range(9):
+        x = rnd.randint(-100, W + 100)
+        wdt = rnd.randint(30, 90)
+        rd.polygon([(x, 0), (x + wdt, 0), (x + wdt - 220, H), (x - 220, H)],
+                   fill=(255, 200, 60, rnd.randint(5, 12)))
+    ray = ray.filter(ImageFilter.GaussianBlur(22))
+    img = Image.alpha_composite(img.convert("RGBA"), ray)
+    # bokeh طلایی
+    bk = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(bk)
+    for i in range(26):
+        x, y = rnd.randint(0, W), rnd.randint(0, H)
+        r = rnd.randint(6, 34)
+        a = rnd.randint(14, 44)
+        bd.ellipse((x - r, y - r, x + r, y + r), fill=(255, 210, 90, a))
+    bk = bk.filter(ImageFilter.GaussianBlur(7))
+    img = Image.alpha_composite(img, bk)
+    # وینیت تیره دور کادر
+    vin = Image.new("L", (W, H), 0)
+    vd = ImageDraw.Draw(vin)
+    vd.ellipse((-W * 0.25, -H * 0.25, W * 1.25, H * 1.25), fill=255)
+    vin = vin.filter(ImageFilter.GaussianBlur(140))
+    dark = Image.new("RGBA", (W, H), (6, 5, 2, 150))
+    dark.putalpha(Image.eval(vin, lambda p: max(0, 150 - p // 2)))
+    img = Image.alpha_composite(img, dark)
+    return img.convert("RGB")
+
+
+_GOLD_BG_CACHE: Optional[Image.Image] = None
+
+
+def _get_gold_bg() -> Image.Image:
+    global _GOLD_BG_CACHE
+    if _GOLD_BG_CACHE is None:
+        _GOLD_BG_CACHE = _gold_lux_bg()
+    return _GOLD_BG_CACHE
+
+
 def _draw_24h_range_bar(cd, x0, x1, y, low, high, price, accent):
     """۱۹. نوار موقعیت ۲۴ ساعته — قیمت الان کجای بازه Low–High است."""
     span = (high - low) or 1
@@ -667,7 +778,10 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
     asset_type = _asset_type(code)  # ۳. تعیین نوع ارز برای رنگ‌بندی
     if bg is None:
         _, kind, key = catalog.asset_urls(code)
-    if bg is not None:
+    if asset_type == "gold" and bg is None:
+        # ۲۷. طلا/سکه — پس‌زمینه‌ی لوکس طلایی (گرادیان + اشعه + bokeh)
+        base = _get_gold_bg().copy()
+    elif bg is not None:
         base = _blurred_bg(bg, color_type=asset_type)  # رنگ متغیر!
     else:
         # طلا/سکه/آیکون‌های گمشده — پس‌زمینه‌ی مشکی‌طلایی خالص
@@ -721,7 +835,14 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
 
     # پرچم/آیکون دایره‌ای
     icon_img = _fetch_bg_image(code)
-    if icon_img is not None:
+    if icon_img is None and asset_type == "gold":
+        # ۲۷. طلا/سکه — لوگوی شمش طلای سه‌بعدی (به‌جای متن Au)
+        try:
+            _ing = _gold_ingot_logo(84)
+            card.alpha_composite(_ing, (28, y - 10))
+        except Exception as e_gold:
+            log.warning("gold ingot logo: %s", e_gold)
+    elif icon_img is not None:
         s = 84
         ic = icon_img.resize((s, s), Image.LANCZOS)
         if ic.mode != "RGBA":

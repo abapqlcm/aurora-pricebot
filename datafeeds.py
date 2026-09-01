@@ -317,10 +317,11 @@ def get_banner_data(code: str) -> Optional[dict]:
             return None
         klines = [c[3] for c in ohlcv]
         price_usd = klines[-1]
-        pct = binance_24h_change(sym)
+        # ۲۸. سرعت: pct از خود کندل‌ها (کندل ۲۴h قبل) — بدون درخواست دوم به Binance
+        p_24 = klines[-25] if len(klines) >= 25 else klines[0]
+        pct = round((price_usd - p_24) / p_24 * 100, 2) if p_24 else None
         # تاریخچه‌ی ۲۴h به تومان تبدیل می‌کنیم (دلار × تتر داخلی) تا همه چیز تومانی باشه؟
         # نه — کریپتو را دلاری نشان می‌دهیم، استانداردتر است
-        p_24 = klines[-25] if len(klines) >= 25 else klines[0]
         ch_abs = price_usd - p_24
         if pct is None:
             pct = round((price_usd - p_24) / p_24 * 100, 2)

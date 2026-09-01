@@ -109,6 +109,8 @@ async def _prefetch(ctx: ContextTypes.DEFAULT_TYPE, keys: list):
             try:
                 datafeeds.get_banner_data(k)
                 banner.render_banner(k)
+                # ۲۸. انیمیشن هم گرم — اولین کلیک هم آنی
+                banner.render_banner_video(k)
             except Exception:
                 pass
     asyncio.get_running_loop().run_in_executor(None, _job)
@@ -136,6 +138,8 @@ async def _warm_loop(ctx: ContextTypes.DEFAULT_TYPE):
                 try:
                     datafeeds.get_banner_data(key)
                     banner.render_banner(key)
+                    # ۲۸. ویدیو/انیمیشن هم گرم کن — جواب دکمه/بنر = آنی
+                    banner.render_banner_video(key)
                 except Exception:
                     pass
                 finally:
