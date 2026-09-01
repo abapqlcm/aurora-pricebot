@@ -238,11 +238,14 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("❌ دیتای بازار در دسترس نیست.")
         
         elif kind == "calc":
-            # محاسبه: amount × ارز — بنر + کپشن (همه در یک پیام)
+            # محاسبه: amount × ارز — بنر GIF متحرک + کپشن (همه در یک پیام)
             key, amount = data
             d = await loop.run_in_executor(None, datafeeds.get_banner_data, key)
-            png = await loop.run_in_executor(None, banner.render_banner, key)
-            if png and d:
+            if d:
+                vid = await loop.run_in_executor(None, banner.render_banner_video, key)
+            else:
+                vid = None
+            if vid and d:
                 unit = d.get("unit", "تومان")
                 price = d.get("price") or 0
                 total = amount * price
@@ -258,7 +261,43 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                         f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>${render.fmt_num(round(total, 2))}</b>\n"
                         f"🕐 Update: {render._now_en()}"
                     )
-                await update.message.reply_photo(png, caption=cap, parse_mode="HTML")
+                try:
+                    await update.message.reply_animation(
+                        vid,
+                        filename="aurora_banner.mp4",
+                        duration=2,
+                        width=900,
+                        height=950,
+                        caption=cap,
+                        parse_mode="HTML",
+                    )
+                except Exception as e_anim:
+                    log.warning("calc animation failed (%s) → photo", e_anim)
+                    png = await loop.run_in_executor(None, banner.render_banner, key)
+                    if png:
+                        await update.message.reply_photo(png, caption=cap, parse_mode="HTML")
+            elif d:
+                # ویدیو نبود → عکس ثابت (مسیر قبلی)
+                png = await loop.run_in_executor(None, banner.render_banner, key)
+                if png:
+                    unit = d.get("unit", "تومان")
+                    price = d.get("price") or 0
+                    total = amount * price
+                    if unit == "تومان":
+                        cap = (
+                            f"⭐️ 1 {d['name']} = <b>{render.fmt_num(price)}</b>\n"
+                            f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>{render.fmt_num(int(total))}</b>\n"
+                            f"🕐 Update: {render._now_en()}"
+                        )
+                    else:
+                        cap = (
+                            f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
+                            f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>${render.fmt_num(round(total, 2))}</b>\n"
+                            f"🕐 Update: {render._now_en()}"
+                        )
+                    await update.message.reply_photo(png, caption=cap, parse_mode="HTML")
+                else:
+                    await update.message.reply_text(f"❌ نتونستم قیمت {key} رو بگیرم.")
             else:
                 await update.message.reply_text(f"❌ نتونستم قیمت {key} رو بگیرم.")
     
