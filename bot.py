@@ -23,6 +23,18 @@ TOKEN = os.getenv("BOT_TOKEN", "")
 
 async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """دستور /start."""
+    # ۶. دکمه‌های کوتاه (Inline buttons)
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔍 جستجو", callback_data="help_search"),
+            InlineKeyboardButton("📊 کریپتو", callback_data="show_crypto"),
+        ],
+        [
+            InlineKeyboardButton("🥇 طلا", callback_data="show_gold"),
+            InlineKeyboardButton("💱 ارزها", callback_data="show_fiat"),
+        ],
+    ])
+    
     await update.message.reply_text(
         "سلام! 👋\n\n"
         "من **AuroraPriceBot** هستم — ربات قیمت لحظه‌ای ارزها و رمزارزها.\n\n"
@@ -31,12 +43,13 @@ async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "• یا عدد + ارز: `125 دلار`، `2 گرم طلا`\n"
         "• من بنر قیمت تصویری برات می‌فرستم\n\n"
         "**ارزهای موجود:**\n"
-        "💵 **دلار، یورو، پوند، درهم، لیر، فرانک، دینار...**\n"
-        "🥇 **طلا (۱۸ و ۲۴)، سکه امامی، بهار، نیم، ربع، گرمی**\n"
+        "💵 **۶۵ ارز فیات** (دلار، یورو، پوند، درهم...)\n"
+        "🥇 **طلا و سکه** (۱۸، ۲۴، امامی، بهار، نیم، ربع، گرمی)\n"
         "💎 **تتر (USDT)**\n"
-        "🪙 **بیت‌کوین، اتریوم، سولانا، تون، دوج، شیبا و ۲۴ کریپتوی دیگر**\n\n"
+        "🪙 **۲۹ کریپتو** (بیت‌کوین، اتریوم، سولانا، و...)\n\n"
         "بیا شروع کن! 🚀",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=keyboard
     )
 
 

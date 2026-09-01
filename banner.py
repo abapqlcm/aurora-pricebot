@@ -224,10 +224,11 @@ def _area_chart(history, w: int, h: int, up: bool, ohlcv=None) -> Image.Image:
     d.line(smooth, fill=(0, 0, 0, 60), width=2, joint="curve")
     d.line(smooth, fill=line_color + (255,), width=3, joint="curve")
 
-    # نقطه‌ی درخشان آخر (داخل کادر)
+    # نقطه‌ی درخشان آخر (داخل کادر) + Pulse (انیموشن ضعیف)
     ex, ey = smooth[-1]
     ey = max(PAD_T, min(h - PAD_B, ey))
-    for r, a in [(14, 55), (9, 110), (4, 255)]:
+    # ۵. Pulse: چندین لایه نورانی برای اثر تپش
+    for r, a in [(16, 40), (11, 80), (6, 150), (2, 255)]:
         d.ellipse((ex - r, ey - r, ex + r, ey + r), fill=line_color + (a,))
 
         # محور قیمت — حذف شد (خواست کاربر: اعداد سمت راست چارت نباشه)
@@ -261,6 +262,20 @@ def _code_ids(code: str):
 
 
 _PNG_CACHE: dict = {}
+
+def _asset_type(code: str) -> str:
+    """نوع ارز برای رنگ‌بندی: fiat / gold / crypto / stable."""
+    std = catalog.resolve(code) or code
+    if std in catalog.FIAT:
+        return "fiat"
+    if std in catalog.GOLD:
+        return "gold"
+    if std in catalog.STABLE:
+        return "stable"
+    if std in catalog.CRYPTO:
+        return "crypto"
+    return "fiat"
+
 
 def render_banner(code: str) -> Optional[bytes]:
     import time
@@ -297,10 +312,11 @@ def render_banner(code: str) -> Optional[bytes]:
     # پس‌زمینه
     bg = _fetch_bg_image(code)
     kind = None
+    asset_type = _asset_type(code)  # ۳. تعیین نوع ارز برای رنگ‌بندی
     if bg is None:
         _, kind, key = catalog.asset_urls(code)
     if bg is not None:
-        base = _blurred_bg(bg)
+        base = _blurred_bg(bg, color_type=asset_type)  # رنگ متغیر!
     else:
         # طلا/سکه/آیکون‌های گمشده — پس‌زمینه‌ی مشکی‌طلایی خالص
         base = Image.new("RGB", (W, H), (12, 12, 16))
@@ -325,9 +341,13 @@ def render_banner(code: str) -> Optional[bytes]:
     cd = ImageDraw.Draw(card)
     cw, ch = card.size
 
-    # کارت نیمه‌شفاف + حاشیه طلایی
+    # ۴. رنگ‌ها بر اساس نوع ارز
+    colors = COLORS_BY_TYPE.get(asset_type, COLORS_BY_TYPE["fiat"])
+    card_outline = colors["accent"]  # حاشیه رنگی
+    
+    # کارت نیمه‌شفاف + حاشیه رنگی (نه طلایی)
     cd.rounded_rectangle((0, 0, cw - 1, ch - 1), radius=36, fill=(20, 20, 28, 216),
-                         outline=GOLD + (200,), width=2)
+                         outline=card_outline + (200,), width=3)  # width=3 برای نیون
 
     y = 36
     # --- عنوان + پرچم ---
