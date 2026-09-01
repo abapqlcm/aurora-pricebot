@@ -254,6 +254,14 @@ def render_fa_num(v) -> str:
 
 _VIDEO_LOCK = threading.Lock()
 _MP4_CACHE: dict = {}
+# ۲۵. قیمت لحظه‌ی رندر هر ویدیو — برای مچ‌کردن کپشن با بنر (بدون مغایرت)
+_LAST_VIDEO_PRICE: dict = {}
+
+
+def get_last_video_price(code: str):
+    """قیمتی که آخرین ویدیوی رندرشده‌ی این ارز روش ساخته شده (برای کپشن مچ)."""
+    ck = catalog.resolve(code) or code
+    return _LAST_VIDEO_PRICE.get(ck)
 
 
 def render_banner_video(code: str, duration: float = 2.2, fps: int = 20) -> Optional[bytes]:
@@ -271,7 +279,13 @@ def render_banner_video(code: str, duration: float = 2.2, fps: int = 20) -> Opti
         if hit and now - hit[0] < 60:
             return hit[1]
         try:
-            return _render_video_uncached(code, ck, now, duration, fps)
+            out = _render_video_uncached(code, ck, now, duration, fps)
+            if out:
+                # ثبت قیمتِ همون لحظه‌ی رندر (برای کپشن مچ)
+                d = datafeeds.get_banner_data(code)
+                if d:
+                    _LAST_VIDEO_PRICE[ck] = d.get("price")
+            return out
         except Exception as e:
             log.warning("video render %s: %s", code, e)
             return None

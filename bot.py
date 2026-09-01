@@ -10,7 +10,7 @@ import threading
 import asyncio
 import subprocess
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaAnimation
 from telegram.ext import Application, ContextTypes, MessageHandler, CommandHandler, CallbackQueryHandler, filters
 
 import render
@@ -199,6 +199,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             loop2 = _aio.get_running_loop()
             vid = await loop2.run_in_executor(None, banner.render_banner_video, key)
             if vid:
+                # ۲۶. قیمت مچ: قیمتِ لحظه‌ی رندر ویدیو (کپشن = بنر، بدون مغایرت)
+                v_price = banner.get_last_video_price(key)
                 d0 = await loop2.run_in_executor(None, datafeeds.get_banner_data, key)
                 # ۲۳. حالت GIF: reply_animation — اتوپلی + لوپ بی‌نهایت (بدون دکمه‌ی پخش)
                 # نکته: با bytes خام باید filename بدیم وگرنه تلگرام application/octet-stream نشون می‌ده!
@@ -209,7 +211,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                         duration=2,
                         width=900,
                         height=950,
-                        caption=_caption_for(key, d0),
+                        caption=_caption_for(key, d0, price_override=v_price),
                         parse_mode="HTML",
                         reply_markup=_carousel_kb(key),
                     )
@@ -218,7 +220,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_video(
                         vid,
                         filename="aurora_banner.mp4",
-                        caption=_caption_for(key, d0),
+                        caption=_caption_for(key, d0, price_override=v_price),
                         parse_mode="HTML",
                         reply_markup=_carousel_kb(key),
                         supports_streaming=True,
@@ -327,12 +329,12 @@ def _carousel_kb(current: str):
     ]])
 
 
-def _caption_for(key: str, d: dict | None) -> str:
-    """کپشن مشترک برای ویدیو/بنر."""
+def _caption_for(key: str, d: dict | None, price_override=None) -> str:
+    """کپشن مشترک برای ویدیو/بنر. price_override → قیمت دقیق همون لحظه‌ی بنر (بدون مغایرت)."""
     if not d:
         return "⭐️ AuroraPriceBot"
     unit = d.get("unit", "تومان")
-    price = d.get("price") or 0
+    price = price_override if price_override is not None else (d.get("price") or 0)
     pct = d.get("change_pct") or 0
     if unit != "تومان":
         ohlcv = d.get("ohlcv", [])
@@ -366,29 +368,70 @@ def _caption_for(key: str, d: dict | None) -> str:
 
 
 async def send_price_card(update_or_query, key: str, edit=False):
-    """بنر + کپشن + دکمه‌های ورق‌زدن — برای پیام جدید یا ویرایش (transition)."""
+    """بنر GIF متحرک + کپشن + دکمه‌های ورق‌زدن — پیام جدید یا ویرایش (transition).
+    همیشه animation می‌فرسته؛ فقط اگه ویدیو نبود عکس ثابت (fallback)."""
     import asyncio
     loop = asyncio.get_running_loop()
     d = await loop.run_in_executor(None, datafeeds.get_banner_data, key)
-    png = await loop.run_in_executor(None, banner.render_banner, key)
-    if not png or not d:
+    vid = await loop.run_in_executor(None, banner.render_banner_video, key)
+    if not d:
         msg = f"❌ نتونستم قیمت {key} رو بگیرم."
         if edit and hasattr(update_or_query, "edit_message_text"):
             await update_or_query.edit_message_text(msg)
         else:
             await update_or_query.message.reply_text(msg)
         return
-    cap = _caption_for(key, d)
+    # ۲۶. قیمت مچ: کپشن = قیمتِ لحظه‌ی رندر ویدیو
+    v_price = banner.get_last_video_price(key)
+    cap = _caption_for(key, d, price_override=v_price)
     kb = _carousel_kb(key)
+    if vid:
+        if edit:
+            try:
+                media = InputMediaAnimation(
+                    vid,
+                    filename="aurora_banner.mp4",
+                    duration=2, width=900, height=950,
+                    caption=cap, parse_mode="HTML",
+                )
+                await update_or_query.edit_message_media(media=media, reply_markup=kb)
+                return
+            except Exception as e_edit:
+                log.warning("edit→animation failed (%s) → new msg", e_edit)
+                # ویرایش ممکن نبود (مثلا پیام قبلی عکسه) → پیام جدید بفرست
+        try:
+            await update_or_query.message.reply_animation(
+                vid,
+                filename="aurora_banner.mp4",
+                duration=2, width=900, height=950,
+                caption=cap, parse_mode="HTML",
+                reply_markup=kb,
+            )
+        except Exception as e_anim:
+            log.warning("animation send failed (%s) → photo", e_anim)
+            png = await loop.run_in_executor(None, banner.render_banner, key)
+            if edit:
+                await update_or_query.message.reply_photo(png, caption=cap, parse_mode="HTML", reply_markup=kb)
+            else:
+                await update_or_query.message.reply_photo(png, caption=cap, parse_mode="HTML", reply_markup=kb)
+        return
+    # fallback: عکس ثابت
+    png = await loop.run_in_executor(None, banner.render_banner, key)
+    if not png:
+        msg = f"❌ نتونستم قیمت {key} رو بگیرم."
+        if edit and hasattr(update_or_query, "edit_message_text"):
+            await update_or_query.edit_message_text(msg)
+        else:
+            await update_or_query.message.reply_text(msg)
+        return
     if edit:
         try:
             media = InputMediaPhoto(png, caption=cap, parse_mode="HTML")
             await update_or_query.edit_message_media(media=media, reply_markup=kb)
+            return
         except Exception:
-            # fallback: پیام جدید اگه ویرایش ممکن نبود
-            await update_or_query.message.reply_photo(png, caption=cap, parse_mode="HTML", reply_markup=kb)
-    else:
-        await update_or_query.message.reply_photo(png, caption=cap, parse_mode="HTML", reply_markup=kb)
+            pass
+    await update_or_query.message.reply_photo(png, caption=cap, parse_mode="HTML", reply_markup=kb)
 
 
 async def on_error(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
