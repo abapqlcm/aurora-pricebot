@@ -400,7 +400,11 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
                     log.warning("neon border frame: %s", e_nb)
                 # ۰) بج LIVE چشمک‌زن — دوره‌ی ۲.۴s نرم (بجای ۱s تند)
                 _draw_live_badge(d, badge_x, badge_y, pulse_t=(f / (fps * 2.4)) % 1.0)
-                # (پارتیکل‌ها حذف شد — کاربر: حالت فیک می‌ده)
+                # ذرات نورانی (برگشت — کاربر خواست بمونه)
+                try:
+                    _draw_particles(d, w, h, t, accent_color, seed=42)
+                except Exception as e_p:
+                    log.warning("particles frame: %s", e_p)
                 # ایده ۲: roll-up قیمت — ۴۰٪ اول انیمیت، بعد ثابت
                 try:
                     _rollup_digits(img, w // 2, 50 + 36 + 110 + 56, data["price"],
@@ -623,9 +627,8 @@ def _draw_24h_range_bar(cd, x0, x1, y, low, high, price, accent):
 
 
 def _draw_card_neon(d, x0, y0, x1, y1, t: float):
-    """ایده ۴ (فیکس): نئون چرخشی دور لبه‌ی کارت — قوس روشنی که دور کارت می‌چرخه.
-    رنگ‌ها بین ۴ رنگ (آبی/بنفش/طلایی/سبز) لر می‌خورن + یه قوس درخشان که می‌چرخه."""
-    import math
+    """ایده ۴ (نسخه نهایی): نئون دور کارت — فقط رنگ پیوسته عوض می‌شه (آبی→بنفش→طلایی→سبز).
+    بدون قوس چرخان (کاربر نخواست)."""
     palette = [(70, 150, 255), (180, 100, 255), (255, 215, 0), (100, 255, 150)]
     n = len(palette)
     ph = t * n
@@ -633,62 +636,7 @@ def _draw_card_neon(d, x0, y0, x1, y1, t: float):
     i1 = (i0 + 1) % n
     ffrac = ph - int(ph)
     col = tuple(int(palette[i0][k] + (palette[i1][k] - palette[i0][k]) * ffrac) for k in range(3))
-    # قوس درخشان: زاویه شروع با زمان می‌چرخه — دور مستطیل با گوشه‌گرد
-    # مسیر: perimeter param — با arc های ۴ گوشه + ۴ ضلع ساده می‌سازیم
-    # ساده‌تر: rounded_rectangle با outline رنگی ثابت + قوس نورانی متحرک
-    # ۱) outline پایه رنگی (نرم)
-    d.rounded_rectangle((x0, y0, x1, y1), radius=36, outline=col + (170,), width=3)
-    # ۲) قوس نورانی چرخان — روی مسیر rounded rect با نقاط نمونه‌گیری
-    # مسیر رو با نقاط پارامتری می‌سازیم (۴ ضلع + ۴ ربع دایره)
-    def path_point(s):
-        # s∈[0,1) حول مسیر؛ شروع از بالا-وسط، ساعتگرد
-        import math as _m
-        R = 36
-        x0_, y0_, x1_, y1_ = x0, y0, x1, y1
-        W_, H_ = x1_ - x0_, y1_ - y0_
-        # طول‌ها
-        straight_w = W_ - 2 * R
-        straight_h = H_ - 2 * R
-        per = 2 * straight_w + 2 * straight_h + 2 * _m.pi * R
-        ss = s * per
-        # شروع: وسط ضلع بالا، ساعتگرد
-        half_w = straight_w / 2
-        if ss < half_w:  # بالا: چپ→راست
-            return (x0_ + half_w + ss, y0_)
-        ss -= half_w
-        if ss < straight_h + _m.pi * R / 2:  # گوشه بالا-راست + ضلع راست
-            if ss < _m.pi * R / 2:
-                a = _m.pi / 2 + ss / R
-                return (x1_ - R + R * _m.cos(a), y0_ + R + R * _m.sin(a))
-            ss -= _m.pi * R / 2
-            return (x1_, y0_ + R + ss)
-        ss -= straight_h + _m.pi * R / 2
-        if ss < straight_w + _m.pi * R / 2:  # پایین: راست→چپ (گوشه پایین-راست اول)
-            if ss < _m.pi * R / 2:
-                a = ss / R
-                return (x1_ - R + R * _m.cos(a), y1_ - R + R * _m.sin(a))
-            ss -= _m.pi * R / 2
-            return (x1_ - R - ss, y1_)
-        ss -= straight_w + _m.pi * R / 2
-        # گوشه پایین-چپ + ضلع چپ (بالا رفتن)
-        if ss < _m.pi * R / 2:
-            a = _m.pi + ss / R
-            return (x0_ + R + R * _m.cos(a), y1_ - R + R * _m.sin(a))
-        ss -= _m.pi * R / 2
-        return (x0_, y1_ - R - ss)
-    # قوس اصلی: ۵۵٪ مسیر با دنباله محوشونده
-    arc_len = 0.30
-    steps = 40
-    for i in range(steps):
-        s = (t + i / steps * arc_len) % 1.0
-        fade = 1 - i / steps  # دنباله محو
-        a = int(230 * fade * fade)
-        if a <= 4:
-            continue
-        px, py = path_point(s)
-        r = 5 if i < steps // 3 else 3
-        for rr, aa in [(r + 3, int(a * 0.3)), (r, a)]:
-            d.ellipse((px - rr, py - rr, px + rr, py + rr), fill=col + (aa,))
+    d.rounded_rectangle((x0, y0, x1, y1), radius=36, outline=col + (200,), width=4)
 
 
 def _draw_shine_sweep(cd, x0, y0, x1, y1, t: float, accent):
