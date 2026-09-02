@@ -940,22 +940,34 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
 
     # ---- پس‌زمینه اختصاصی تون ---
     if code == "TON":
-        # پس‌زمینه اختصاصی تون با لوگوی TON
-        base = Image.new("RGB", (W, H), (0, 168, 238))  # پس‌زمینه آبی تون
-        bd = ImageDraw.Draw(base)
-        # گرادیان پس‌زمینه
-        for y in range(H):
-            t = y / H
-            c = (int(0 + 8 * t), int(168 - 20 * t), int(238 - 40 * t))
-            bd.line([(0, y), (W, y)], fill=c)
-        
-        # لوگو تون در گوشه چپ بالا
-        icon = Image.new("RGBA", (84, 84), (0, 0, 0, 0))
-        idraw = ImageDraw.Draw(icon)
-        idraw.ellipse((0, 0, 84, 84), fill=(0, 140, 220))
-        idraw.text((42, 42), "TON", font=_font(36, "b"), fill=(255, 255, 255))
-        base.paste(icon, (28, 36), icon)
-        
+        # بک‌گراند = آیکون واقعی تون (blur بزرگ در وسط) — مثل بقیه بنرها
+        base = Image.new("RGB", (W, H), (10, 18, 28))
+        try:
+            ton_icon = Image.open("assets/ton_icon.png").convert("RGBA")
+            # آیکون بزرگ در وسط پس‌زمینه + blur
+            big = ton_icon.resize((W, W), Image.LANCZOS)
+            big = big.filter(ImageFilter.GaussianBlur(40))
+            # کمی تیره‌تر که متن خوانا باشه
+            dark = Image.new("RGBA", big.size, (0, 0, 0, 130))
+            big = Image.alpha_composite(big, dark).convert("RGB")
+            # resize به ابعاد بنر و paste وسط
+            bh = big.resize((H, H), Image.LANCZOS)
+            base.paste(bh, ((W - H) // 2, 0))
+            bd = ImageDraw.Draw(base)
+            # گرادیان ملایم آبی تون
+            for y in range(H):
+                t = y / H
+                c = (int(2 + 6 * t), int(20 + 12 * t), int(35 + 20 * t))
+                overlay = Image.new("RGB", (W, 1), c)
+                base.paste(overlay, (0, y))
+        except Exception as e_tonbg:
+            log.warning("TON bg: %s", e_tonbg)
+            # فالبک: گرادیان آبی ساده
+            bd = ImageDraw.Draw(base)
+            for y in range(H):
+                t = y / H
+                c = (int(0 + 8 * t), int(60 + 40 * t), int(110 + 60 * t))
+                bd.line([(0, y), (W, y)], fill=c)
         asset_type = "crypto"
         kind = "crypto"
     else:
@@ -1025,16 +1037,22 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
         except Exception as e_gold:
             log.warning("gold ingot logo: %s", e_gold)
     elif code == "TON":
-        # لوگوی اختصاصی تون (در صورت عدم لود آیکون)
-        s = 84
-        icon = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-        idraw = ImageDraw.Draw(icon)
-        # دایره پس‌زمینه آبی تون
-        idraw.ellipse((0, 0, s, s), fill=(0, 168, 238, 255))
-        # متن TON سفید
-        f_ton = _font(36, "b")
-        idraw.text((s//2, s//2), "TON", font=f_ton, fill=(255, 255, 255), anchor="mm")
-        card.paste(icon, (28, y - 10), icon)
+        # لوگوی واقعی تون (آیکون لوکال assets/ton_icon.png)
+        try:
+            s = 84
+            tic = Image.open("assets/ton_icon.png").convert("RGBA").resize((s, s), Image.LANCZOS)
+            mask = Image.new("L", (s, s), 0)
+            ImageDraw.Draw(mask).ellipse((0, 0, s, s), fill=255)
+            card.paste(tic, (28, y - 10), mask)
+        except Exception as e_tonic:
+            log.warning("TON icon: %s", e_tonic)
+            s = 84
+            icon = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+            idraw = ImageDraw.Draw(icon)
+            idraw.ellipse((0, 0, s, s), fill=(0, 168, 238, 255))
+            f_ton = _font(36, "b")
+            idraw.text((s//2, s//2), "TON", font=f_ton, fill=(255, 255, 255), anchor="mm")
+            card.paste(icon, (28, y - 10), icon)
     elif icon_img is not None:
         s = 84
         ic = icon_img.resize((s, s), Image.LANCZOS)
