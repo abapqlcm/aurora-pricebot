@@ -940,34 +940,32 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
 
     # ---- پس‌زمینه اختصاصی تون ---
     if code == "TON":
-        # بک‌گراند = آیکون واقعی تون (blur بزرگ در وسط) — مثل بقیه بنرها
-        base = Image.new("RGB", (W, H), (10, 18, 28))
+        # بک‌گراند خفن تون: تیره آبی + هاله نئون + لوگوی بزرگ نیمه‌شفاف وسط
+        base = Image.new("RGB", (W, H), (8, 16, 30))
+        bd = ImageDraw.Draw(base)
+        for y in range(H):
+            t = y / H
+            c = (int(6 + 10 * t), int(14 + 16 * t), int(28 + 24 * t))
+            bd.line([(0, y), (W, y)], fill=c)
         try:
-            ton_icon = Image.open("assets/ton_icon.png").convert("RGBA")
-            # آیکون بزرگ در وسط پس‌زمینه + blur
-            big = ton_icon.resize((W, W), Image.LANCZOS)
-            big = big.filter(ImageFilter.GaussianBlur(40))
-            # کمی تیره‌تر که متن خوانا باشه
-            dark = Image.new("RGBA", big.size, (0, 0, 0, 130))
-            big = Image.alpha_composite(big, dark).convert("RGB")
-            # resize به ابعاد بنر و paste وسط
-            bh = big.resize((H, H), Image.LANCZOS)
-            base.paste(bh, ((W - H) // 2, 0))
-            bd = ImageDraw.Draw(base)
-            # گرادیان ملایم آبی تون
-            for y in range(H):
-                t = y / H
-                c = (int(2 + 6 * t), int(20 + 12 * t), int(35 + 20 * t))
-                overlay = Image.new("RGB", (W, 1), c)
-                base.paste(overlay, (0, y))
+            _ton_logo_full = Image.open("assets/ton_icon.png").convert("RGBA")
+            base = base.convert("RGBA")
+            # هاله نئونی آبی پشت لوگو
+            blue_glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            gd_glow = ImageDraw.Draw(blue_glow)
+            gd_glow.ellipse((W//2 - 300, H//2 - 300, W//2 + 300, H//2 + 300),
+                            fill=(0, 130, 220, 60))
+            blue_glow = blue_glow.filter(ImageFilter.GaussianBlur(80))
+            base.alpha_composite(blue_glow)
+            # لوگوی بزرگ نیمه‌شفاف وسط (55٪ شفاف — خفن ولی مزاحم متن نمی‌شه)
+            _logo_big = _ton_logo_full.resize((560, 560), Image.LANCZOS)
+            _la = _logo_big.split()[3].point(lambda a: int(a * 0.55))
+            _logo_big.putalpha(_la)
+            base.alpha_composite(_logo_big, (W//2 - 280, H//2 - 280))
+            base = base.convert("RGB")
         except Exception as e_tonbg:
             log.warning("TON bg: %s", e_tonbg)
-            # فالبک: گرادیان آبی ساده
-            bd = ImageDraw.Draw(base)
-            for y in range(H):
-                t = y / H
-                c = (int(0 + 8 * t), int(60 + 40 * t), int(110 + 60 * t))
-                bd.line([(0, y), (W, y)], fill=c)
+            base = base.convert("RGB") if base.mode == "RGBA" else base
         asset_type = "crypto"
         kind = "crypto"
     else:
