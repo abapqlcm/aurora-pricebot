@@ -18,7 +18,7 @@ log = logging.getLogger("data")
 
 UA = {"User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
 _cache = {}
-CACHE_TTL = 15  # کش کوتاه برای سرعت (قیمت هنوز کاملاً زنده)
+CACHE_TTL = 20  # کش کوتاه برای سرعت (قیمت هنوز کاملاً زنده)
 
 
 def _get(url, timeout=12):
@@ -29,10 +29,12 @@ def _get(url, timeout=12):
 
 def _cached(key, fn):
     now = time.time()
-    if key in _cache and now - _cache[key][0] < CACHE_TTL:
-        return _cache[key][1]
+    # تبدیل کلید به رشته برای اطمینان از کارکرد صحیح کش
+    key_str = str(key) if not isinstance(key, str) else key
+    if key_str in _cache and now - _cache[key_str][0] < CACHE_TTL:
+        return _cache[key_str][1]
     v = fn()
-    _cache[key] = (now, v)
+    _cache[key_str] = (now, v)
     return v
 
 
@@ -69,7 +71,7 @@ _hist_cache: dict = {}
 
 def tgju_history(tgju_id: str, days: int = 14) -> List[float]:
     """بسته‌شدن‌های روزانه از indicator API — کش 1 ساعته (روزانه‌ست، زود عوض نمی‌شه)."""
-    key = ("h14", tgju_id)
+    key = f"h14_{tgju_id}"
     import time as _t
     hit = _hist_cache.get(key)
     if hit and _t.time() - hit[0] < 3600:
@@ -77,9 +79,14 @@ def tgju_history(tgju_id: str, days: int = 14) -> List[float]:
     def fetch():
         try:
             r = _get(f"https://api.tgju.org/v1/market/indicator/summary-table-data/{tgju_id}", timeout=15)
-            rows = r.json()["data"][:days]
+            data = r.json().get("data", [])
+            if not data:
+                return []
+            rows = data[:days]
             closes = []
             for row in rows:
+                if len(row) < 4:
+                    continue
                 close = row[3]  # [open, low, high, close, ...]
                 closes.append(float(str(close).replace(",", "")))
             v = list(reversed(closes))
@@ -88,7 +95,7 @@ def tgju_history(tgju_id: str, days: int = 14) -> List[float]:
         except Exception as e:
             log.warning("tgju history %s: %s", tgju_id, e)
             return []
-    return _cached(("hist", tgju_id), fetch)
+    return fetch()  # کش داخلی خودش را دارد، نیازی به _cached نیست
 
 
 # ---------------- Binance ----------------
@@ -193,7 +200,8 @@ def erapi_rates() -> dict:
         return rates
     except Exception as e:
         log.warning("erapi: %s", e)
-        return _fx_rates_cache["rates"]
+        # بازگشت کش قدیمی حتی اگر خالی باشد (جلوگیری از کرش در fx_to_usd)
+        return _fx_rates_cache["rates"] if _fx_rates_cache["rates"] else {}
 
 
 def fx_to_usd(ccy: str) -> Optional[float]:
@@ -267,7 +275,7 @@ def get_banner_data(code: str) -> Optional[dict]:
         hist_rial = tgju_history(tg_id)
         hist = [x / 10 for x in hist_rial]
         return {
-            "name": name, "price": p // 10, "change_pct": dp,
+            "name": name, "price": (p // 10 if p else None), "change_pct": dp,
             "change_abs": (d // 10 if d else None),
             "history": hist, "unit": "تومان", "source": "TGJU",
         }
@@ -279,8 +287,11 @@ def get_banner_data(code: str) -> Optional[dict]:
         if last:
             # از Wallex 24h high/low بگیر
             try:
-                r = _get("https://api.wallex.ir/v1/markets?symbol=USDTTMN", timeout=8)
-                stats = r.json()['result']['symbols']['USDTTMN']['stats']
+                r = _get("https://api.wallex.ir/v1/markets", timeout=8)
+                result = r.json().get('result', {})
+                symbols = result.get('symbols', {})
+                usdt_data = symbols.get('USDTTMN', {})
+                stats = usdt_data.get('stats', {})
                 high_24 = float(stats.get('24h_highPrice', last))
                 low_24 = float(stats.get('24h_lowPrice', last))
                 # fake ohlcv برای chart — ساختار [open, high, low, close] مثل بایننس
@@ -289,7 +300,8 @@ def get_banner_data(code: str) -> Optional[dict]:
                     [low_24, high_24, low_24, last],
                     [last, high_24, low_24, last]
                 ]
-            except:
+            except Exception as e:
+                log.warning("wallex USDTTMN stats: %s", e)
                 high_24 = low_24 = last
                 ohlcv = []
 
@@ -319,16 +331,15 @@ def get_banner_data(code: str) -> Optional[dict]:
         price_usd = klines[-1]
         # ۲۸. سرعت: pct از خود کندل‌ها (کندل ۲۴h قبل) — بدون درخواست دوم به Binance
         p_24 = klines[-25] if len(klines) >= 25 else klines[0]
-        pct = round((price_usd - p_24) / p_24 * 100, 2) if p_24 else None
+        # محاسبه تغییرات ۲۴ ساعته با جلوگیری از تقسیم بر صفر
+        pct = round((price_usd - p_24) / p_24 * 100, 2) if p_24 and p_24 != 0 else None
         # تاریخچه‌ی ۲۴h به تومان تبدیل می‌کنیم (دلار × تتر داخلی) تا همه چیز تومانی باشه؟
         # نه — کریپتو را دلاری نشان می‌دهیم، استانداردتر است
-        ch_abs = price_usd - p_24
-        if pct is None:
-            pct = round((price_usd - p_24) / p_24 * 100, 2)
+        ch_abs = price_usd - p_24 if p_24 else 0.0
         # ۱۷. high/low واقعی ۲۴h از کندل‌های ۱۵ دقیقه‌ای اخیر (۹۶ کندل = ۲۴ ساعت)
         h24 = ohlcv[-96:] if len(ohlcv) >= 96 else ohlcv
-        high_24 = max(x[1] for x in h24)
-        low_24 = min(x[2] for x in h24)
+        high_24 = max((x[1] for x in h24), default=price_usd) if h24 else price_usd
+        low_24 = min((x[2] for x in h24), default=price_usd) if h24 else price_usd
         return {
             "name": name, "price": price_usd, "change_pct": pct,
             "change_abs": ch_abs, "history": klines, "ohlcv": ohlcv,
@@ -363,8 +374,10 @@ def market_overview() -> dict:
     with_pct = [r for r in rows if r["pct"] is not None]
     if with_pct:
         sorted_r = sorted(with_pct, key=lambda r: r["pct"], reverse=True)
+        # فقط اگر بیشترین مقدار مثبت باشد top را تنظیم کن
         if sorted_r[0]["pct"] > 0:
             top = (sorted_r[0]["name"], sorted_r[0]["pct"])
+        # فقط اگر کمترین مقدار منفی باشد bottom را تنظیم کن
         if sorted_r[-1]["pct"] < 0:
             bottom = (sorted_r[-1]["name"], sorted_r[-1]["pct"])
     return {"rows": rows, "top": top, "bottom": bottom}
@@ -394,7 +407,8 @@ def record_snapshot(code: str, tgju_id: str = None, binance_sym: str = None):
         data = []
         if _os.path.exists(path):
             try:
-                data = _json.load(open(path))
+                with open(path, "r") as f:
+                    data = _json.load(f)
             except Exception:
                 data = []
         # اگه آخرین snapshot تازه‌ست (<55s)، ثبت نکن (بدون duplicate و بدون fetch اضافه)
@@ -417,7 +431,8 @@ def record_snapshot(code: str, tgju_id: str = None, binance_sym: str = None):
         data.append([now, price])
         # حذف نقاط قدیمی‌تر از ۶۰ نقطه یا ۲۴ ساعت
         data = [x for x in data if now - x[0] < 86400][-60:]
-        _json.dump(data, open(path, "w"))
+        with open(path, "w") as f:
+            _json.dump(data, f)
     except Exception as e:
         log.warning("record_snapshot %s: %s", code, e)
 

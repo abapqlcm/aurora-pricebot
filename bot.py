@@ -135,8 +135,10 @@ async def _warm_loop(ctx: ContextTypes.DEFAULT_TYPE):
             idx += 1
 
             def _job(key=k):
-                if not _warm_lock.acquire(blocking=False):
-                    return  # قبلی هنوز در حال اجراست — skip (بدون صف)
+                # ۱. قفل منحصر به فرد برای هر کلید — جلوگیری از race condition
+                key_lock = threading.Lock()
+                if not key_lock.acquire(blocking=False):
+                    return  # اگر قفل گرفته بود، از کار صرف‌نظر
                 try:
                     datafeeds.get_banner_data(key)
                     banner.render_banner(key)
@@ -145,7 +147,7 @@ async def _warm_loop(ctx: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
                 finally:
-                    _warm_lock.release()
+                    key_lock.release()
 
             await asyncio.get_running_loop().run_in_executor(None, _job)
         except Exception as e:

@@ -117,9 +117,16 @@ def _clean(s: str) -> str:
     return s
 
 
+def _to_en_digits(s: str) -> str:
+    """تبدیل اعداد فارسی/عربی به انگلیسی."""
+    return s.translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789"))
+
 def parse_input(text: str) -> Tuple[Optional[str], Any]:
     t = text.strip()
     tc = t.lower()
+    # تبدیل اعداد فارسی به انگلیسی قبل از پارس
+    t_en = _to_en_digits(t)
+    tc_en = t_en.lower()
     tc = re.sub(r"\s+", " ", tc)
     tc_clean = _clean(tc)
 
@@ -147,7 +154,12 @@ def parse_input(text: str) -> Tuple[Optional[str], Any]:
             amount = float(n)
         except ValueError:
             amount = None
-        if amount:
+        if amount is not None:
+            key = FA_TO_KEY.get(tc_clean) or FA_TO_KEY.get(tc) or _resolve_text(text_no_nums_clean or text_no_nums)
+            if key:
+                return ("calc", (key, amount))
+        # بررسی برای ورودی‌های فارسی
+        if amount is not None:
             key = FA_TO_KEY.get(tc_clean) or FA_TO_KEY.get(tc) or _resolve_text(text_no_nums_clean or text_no_nums)
             if key:
                 return ("calc", (key, amount))
@@ -298,5 +310,5 @@ def calc_message(key, amount):
     name = d["name"]
     unit = d["unit"]
     if unit == "تومان":
-        return f"🧮 {fmt_num(amount)} {name} = *{fmt_num(int(total))} تومان*"
+        return f"🧮 {fmt_num(amount)} {name} = *{fmt_num(round(total))} تومان*"
     return f"🧮 {fmt_num(amount)} {name} = *${fmt_num(total)}*"
