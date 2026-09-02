@@ -741,11 +741,17 @@ def _draw_surge_badge(cd, x, y, accent):
 
 def _rollup_digits(img, cx, cy, target, t, unit=""):
     """ایده ۲: انیمیشن roll-up عدد قیمت (فقط ویدیو). t∈[0,1) پیشرفت.
-    کاربر: از صفر بره بالا (مثل قبل) ولی «بدون رقم اعشار» — اعداد صحیح نرم."""
+    قیمت بزرگ → صحیح (بدون اعشار). قیمت کوچک <۲۰ (مثل TON 1.31) → دو رقم اعشار
+    وگرنه کل ویدیو فقط «0/1» نشون می‌ده و قیمت واقعی هیچ‌وقت دیده نمی‌شه."""
     eased = 1 - (1 - t) ** 3
-    cur = int(round(target * eased))
+    cur = target * eased
+    if target < 20:
+        txt = f"{cur:,.2f}"
+    else:
+        txt = f"{int(round(cur)):,}"
+    if unit == "دلار":
+        txt += " $"
     d = ImageDraw.Draw(img)
-    txt = f"{cur:,} {unit if unit == 'دلار' else ''}".strip()
     d.text((cx, cy), _rtl(_fa(txt)), font=_font(104, "b"), fill=GOLD_BRIGHT, anchor="mm")
     return img
 
