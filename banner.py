@@ -269,6 +269,8 @@ def render_fa_num(v) -> str:
 
 
 _VIDEO_LOCK = threading.Lock()
+_TON_BG_CACHE: dict = {}
+_VIDEO_BASE_CACHE: dict = {}  # بک‌گراند ویدیو (no_chart) — کلید: (code, price, pct)  # بک‌گراند تون static — یک بار ساخته شه
 _MP4_CACHE: dict = {}
 # ۲۵. قیمت لحظه‌ی رندر هر ویدیو — برای مچ‌کردن کپشن با بنر (بدون مغایرت)
 _LAST_VIDEO_PRICE: dict = {}
@@ -280,7 +282,7 @@ def get_last_video_price(code: str):
     return _LAST_VIDEO_PRICE.get(ck)
 
 
-def render_banner_video(code: str, duration: float = 2.2, fps: int = 20) -> Optional[bytes]:
+def render_banner_video(code: str, duration: float = 2.0, fps: int = 16) -> Optional[bytes]:
     """۵. نمودار متحرک MP4 — خط با انیمیشن کشیده می‌شه + نقطه‌ی pulse.
     خروجی bytes (mp4/h264). کش ۶۰ ثانیه. fallback: None → فراخوان از PNG استفاده کنه."""
     ck = catalog.resolve(code) or code
@@ -331,10 +333,18 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
 
     # پس‌زمینه‌ی بنر **بدون نمودار** (خط static قدیمی حذف) — خط انیمیشنی تنها خطه
     # omit_price=True → قیمت هر فریم با roll-up کشیده می‌شه (ایده ۲) نه در پس‌زمینه
-    base_png = render_banner_base_no_chart(code, omit_price=True)
-    if not base_png:
-        return None
-    base_img = Image.open(io.BytesIO(base_png)).convert("RGB")
+    _bkey = (ck, data.get("price"), (data.get("change_pct") or 0).__round__(2))
+    _bhit = _VIDEO_BASE_CACHE.get(_bkey)
+    if _bhit is not None:
+        base_img = _bhit.copy()
+    else:
+        base_png = render_banner_base_no_chart(code, omit_price=True)
+        if not base_png:
+            return None
+        base_img = Image.open(io.BytesIO(base_png)).convert("RGB")
+        if len(_VIDEO_BASE_CACHE) > 6:
+            _VIDEO_BASE_CACHE.clear()
+        _VIDEO_BASE_CACHE[_bkey] = base_img.copy()
     Wv, Hv = base_img.size
 
     # موقعیت دقیق نمودار: بدون no_chart، y بعد از buy/sell chip روی self_chart_top میفته
@@ -396,6 +406,11 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
             n_frames = int(duration * fps)
             import math
             total = len(smooth_pts)
+            # ماسک clip نمودار — یک بار (نه هر فریم)
+            from PIL import ImageChops as _ic
+            clip = (int(chart_x0), int(chart_y0), int(chart_x0 + chart_w), int(chart_y0 + chart_h - PAD_B))
+            _CHART_CLIP_MASK = Image.new("L", (w, h), 0)
+            ImageDraw.Draw(_CHART_CLIP_MASK).rectangle(clip, fill=255)
             # موقعیت بج LIVE در بنر (کارت: margin 60، icon 28, y-10 → badge در 28+84+14=126, y+24)
             # توجه: بنر no_chart بج نداره → اینجا هر فریم با pulse بکش (blink واقعی)
             badge_x = 60 + 28 + 84 + 14
@@ -431,17 +446,11 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
                 if len(pts) >= 2:
                     chart_top = chart_y0
                     chart_bot = chart_y0 + chart_h - PAD_B
-                    clip = (int(chart_x0), int(chart_top), int(chart_x0 + chart_w), int(chart_bot))
                     poly = list(pts) + [(pts[-1][0], chart_bot),
                                         (pts[0][0], chart_bot)]
-                    mask = Image.new("L", (w, h), 0)
+                    mask = _CHART_CLIP_MASK.copy()
                     md = ImageDraw.Draw(mask)
                     md.polygon(poly, fill=52)
-                    # clip ماسک به کادر نمودار (بیرون نزنه)
-                    clip_img = Image.new("L", (w, h), 0)
-                    ImageDraw.Draw(clip_img).rectangle(clip, fill=255)
-                    from PIL import ImageChops as _ic
-                    mask = _ic.composite(mask, Image.new("L", (w, h), 0), clip_img)
                     grad = Image.new("RGBA", (w, h), (0, 0, 0, 0))
                     gd4 = ImageDraw.Draw(grad)
                     yy0 = max(int(min(p[1] for p in pts)), int(chart_top))
@@ -949,17 +958,22 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
             c = (int(6 + 10 * t), int(14 + 16 * t), int(28 + 24 * t))
             bd.line([(0, y), (W, y)], fill=c)
         try:
-            _ton_logo_full = Image.open("assets/ton_icon.png").convert("RGBA")
-            base = base.convert("RGBA")
-            # هاله نئونی آبی پشت لوگو
-            blue_glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-            gd_glow = ImageDraw.Draw(blue_glow)
-            gd_glow.ellipse((W//2 - 300, H//2 - 300, W//2 + 300, H//2 + 300),
-                            fill=(0, 130, 220, 60))
-            blue_glow = blue_glow.filter(ImageFilter.GaussianBlur(80))
-            base.alpha_composite(blue_glow)
-            base = base.convert("RGB")
-            _TON_LOGO_BIG = _ton_logo_full  # برای کشیدن روی کارت (وسط بنر)
+            _ton_cache = _TON_BG_CACHE.get("bg")
+            if _ton_cache is not None:
+                base = _ton_cache.copy()
+                _TON_LOGO_BIG = Image.open("assets/ton_icon.png").convert("RGBA")
+            else:
+                _ton_logo_full = Image.open("assets/ton_icon.png").convert("RGBA")
+                base = base.convert("RGBA")
+                blue_glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+                gd_glow = ImageDraw.Draw(blue_glow)
+                gd_glow.ellipse((W//2 - 300, H//2 - 300, W//2 + 300, H//2 + 300),
+                                fill=(0, 130, 220, 60))
+                blue_glow = blue_glow.filter(ImageFilter.GaussianBlur(80))
+                base.alpha_composite(blue_glow)
+                base = base.convert("RGB")
+                _TON_BG_CACHE["bg"] = base.copy()
+                _TON_LOGO_BIG = _ton_logo_full
         except Exception as e_tonbg:
             log.warning("TON bg: %s", e_tonbg)
             base = base.convert("RGB") if base.mode == "RGBA" else base

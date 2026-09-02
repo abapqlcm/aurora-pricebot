@@ -118,7 +118,7 @@ async def _prefetch(ctx: ContextTypes.DEFAULT_TYPE, keys: list):
     asyncio.get_running_loop().run_in_executor(None, _job)
 
 
-HOT_KEYS = ["dollar", "euro", "BTC", "usdt", "gold_18", "pound", "try", "aed", "SOL", "ETH"]
+HOT_KEYS = ["dollar", "euro", "BTC", "usdt", "gold_18", "pound", "try", "aed", "SOL", "ETH", "TON"]
 
 # ۱۲. قفل کلی برای دسترسی‌های هم‌زمان به کش‌ها/فایل‌ها (thread-safe)
 _warm_lock = threading.Lock()
@@ -135,10 +135,6 @@ async def _warm_loop(ctx: ContextTypes.DEFAULT_TYPE):
             idx += 1
 
             def _job(key=k):
-                # ۱. قفل منحصر به فرد برای هر کلید — جلوگیری از race condition
-                key_lock = threading.Lock()
-                if not key_lock.acquire(blocking=False):
-                    return  # اگر قفل گرفته بود، از کار صرف‌نظر
                 try:
                     datafeeds.get_banner_data(key)
                     banner.render_banner(key)
@@ -146,13 +142,11 @@ async def _warm_loop(ctx: ContextTypes.DEFAULT_TYPE):
                     banner.render_banner_video(key)
                 except Exception:
                     pass
-                finally:
-                    key_lock.release()
 
             await asyncio.get_running_loop().run_in_executor(None, _job)
         except Exception as e:
             log.warning("warm loop: %s", e)
-        await asyncio.sleep(10)
+        await asyncio.sleep(7)
 
 
 async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -192,8 +186,12 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             log.info("unknown input, returning")
             return
         
-        # فقط اگه ورودی معتبره: جواب (بدون typing indicator — Telegram خودش عکس رو نشون می‌ده)
+        # فقط اگه ورودی معتبره: جواب + نشانگر «در حال ارسال» (حس سرعت)
         log.info("valid input, sending")
+        try:
+            await update.message.chat.send_action("upload_video")
+        except Exception:
+            pass
         
         # ۱۰. fetch+render در thread جدا — event loop بلاک نشه (سرعت)
         import asyncio
@@ -205,11 +203,14 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             # ۵. ویدیو (نمودار متحرک) — اول امتحان کن، فیلد شد PNG
             import asyncio as _aio
             loop2 = _aio.get_running_loop()
-            vid = await loop2.run_in_executor(None, banner.render_banner_video, key)
+            # ⚡ موازی: دیتا و ویدیو همزمان (تا ۳۰۰ms صرفه‌جویی)
+            vid, d0 = await asyncio.gather(
+                loop2.run_in_executor(None, banner.render_banner_video, key),
+                loop2.run_in_executor(None, datafeeds.get_banner_data, key),
+            )
             if vid:
                 # ۲۶. قیمت مچ: قیمتِ لحظه‌ی رندر ویدیو (کپشن = بنر، بدون مغایرت)
                 v_price = banner.get_last_video_price(key)
-                d0 = await loop2.run_in_executor(None, datafeeds.get_banner_data, key)
                 # ۲۹. کریپتو: قیمت تومانی هم تو کپشن (تتر تومانی × قیمت دلاری)
                 _toman = datafeeds.usdt_toman() if d0 and d0.get("unit") != "تومان" else None
                 # ۲۳. حالت GIF: reply_animation — اتوپلی + لوپ بی‌نهایت (بدون دکمه‌ی پخش)
