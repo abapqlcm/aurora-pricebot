@@ -262,7 +262,18 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 price = d.get("price") or 0
                 total = amount * price
                 # BUG-2 فیکس: کریپتوی کوچک (SHIB) قبلاً «$0» می‌شد → دقت داینامیک
-                if unit == "تومان":
+                if key == "TON":
+                    # محاسبه تومانی برای تون
+                    toman_price = datafeeds.usdt_toman() or 0
+                    total_toman = amount * price * toman_price
+                    cap = (
+                        f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
+                        f"≈ <b>{render.fmt_num(int(round(price * toman_price)))} تومان</b>\n"
+                        f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>${render.fmt_num(total)}</b>\n"
+                        f"≈ <b>{render.fmt_num(int(round(total * toman_price)))} تومان</b>\n"
+                        f"🕐 Update: {render._now_en()}"
+                    )
+                elif unit == "تومان":
                     cap = (
                         f"⭐️ 1 {d['name']} = <b>{render.fmt_num(price)}</b>\n"
                         f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>{render.fmt_num(int(total))}</b>\n"

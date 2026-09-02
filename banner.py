@@ -951,11 +951,9 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
         # دایره بزرگ لوگو با افکت
         bd.ellipse((W//4, H//4, 3*W//4, 3*H//4), fill=(0, 140, 220))
         bd.ellipse((W//4 + 10, H//4 + 10, 3*W//4 - 10, 3*H//4 - 10), outline=(255, 255, 255, 100), width=3)
-        # تنظیم asset_type برای تون
         asset_type = "crypto"
         kind = "crypto"
     else:
-        # بقیه ارزها مطابق قبل
         bg = _fetch_bg_image(code)
         kind = None
         asset_type = _asset_type(code)
