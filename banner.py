@@ -1006,6 +1006,17 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
             card.alpha_composite(_ing, (28, y - 10))
         except Exception as e_gold:
             log.warning("gold ingot logo: %s", e_gold)
+    elif code == "TON":
+        # لوگوی اختصاصی تون (در صورت عدم لود آیکون)
+        s = 84
+        icon = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+        idraw = ImageDraw.Draw(icon)
+        # دایره پس‌زمینه آبی تون
+        idraw.ellipse((0, 0, s, s), fill=(0, 168, 238, 255))
+        # متن TON سفید
+        f_ton = _font(36, "b")
+        idraw.text((s//2, s//2), "TON", font=f_ton, fill=(255, 255, 255), anchor="mm")
+        card.paste(icon, (28, y - 10), icon)
     elif icon_img is not None:
         s = 84
         ic = icon_img.resize((s, s), Image.LANCZOS)
