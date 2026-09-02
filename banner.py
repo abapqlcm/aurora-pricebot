@@ -941,16 +941,21 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
     # ---- پس‌زمینه اختصاصی تون ---
     if code == "TON":
         # پس‌زمینه اختصاصی تون با لوگوی TON
-        base = Image.new("RGB", (W, H), (12, 12, 16))
+        base = Image.new("RGB", (W, H), (0, 168, 238))  # پس‌زمینه آبی تون
         bd = ImageDraw.Draw(base)
-        # گرادیان پس‌زمینه آبی تون
+        # گرادیان پس‌زمینه
         for y in range(H):
             t = y / H
             c = (int(0 + 8 * t), int(168 - 20 * t), int(238 - 40 * t))
             bd.line([(0, y), (W, y)], fill=c)
-        # دایره بزرگ لوگو با افکت
-        bd.ellipse((W//4, H//4, 3*W//4, 3*H//4), fill=(0, 140, 220))
-        bd.ellipse((W//4 + 10, H//4 + 10, 3*W//4 - 10, 3*H//4 - 10), outline=(255, 255, 255, 100), width=3)
+        
+        # لوگو تون در گوشه چپ بالا
+        icon = Image.new("RGBA", (84, 84), (0, 0, 0, 0))
+        idraw = ImageDraw.Draw(icon)
+        idraw.ellipse((0, 0, 84, 84), fill=(0, 140, 220))
+        idraw.text((42, 42), "TON", font=_font(36, "b"), fill=(255, 255, 255))
+        base.paste(icon, (28, 36), icon)
+        
         asset_type = "crypto"
         kind = "crypto"
     else:
@@ -960,12 +965,10 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
         if bg is None:
             _, kind, key = catalog.asset_urls(code)
         if asset_type == "gold" and bg is None:
-            # ۲۷. طلا/سکه — پس‌زمینه‌ی لوکس طلایی (گرادیان + اشعه + bokeh)
             base = _get_gold_bg().copy()
         elif bg is not None:
-            base = _blurred_bg(bg, color_type=asset_type)  # رنگ متغیر!
+            base = _blurred_bg(bg, color_type=asset_type)
         else:
-            # طلا/سکه/آیکون‌های گمشده — پس‌زمینه‌ی مشکی‌طلایی خالص
             base = Image.new("RGB", (W, H), (12, 12, 16))
             bd = ImageDraw.Draw(base)
             for y in range(H):
