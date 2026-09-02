@@ -7,6 +7,10 @@
 [![Hosted on Railway](https://img.shields.io/badge/Hosted%20on-Railway-8A2BE2?logo=railway&logoColor=white)](https://railway.app)
 [![Made with ❤️ by @iprez](https://img.shields.io/badge/Made%20with%20%E2%9D%A4%EF%B8%8F%20by-@iprez-FFD700)](https://t.me/iprez)
 
+<p align="center">
+  <img src="assets/hero_banner.png" alt="AuroraPriceBot Hero" width="420">
+</p>
+
 ---
 
 ## 📋 فهرست مطالب
