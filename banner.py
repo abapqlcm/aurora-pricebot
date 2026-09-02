@@ -1012,16 +1012,6 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
     glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(6))
     card.alpha_composite(glow_layer)
 
-    # 🔷 لوگوی بزرگ تون — وسط کارت (پشت متن‌ها و نمودار، شفاف)
-    if code == "TON" and _TON_LOGO_BIG is not None:
-        try:
-            _lg = _TON_LOGO_BIG.resize((460, 460), Image.LANCZOS)
-            _la2 = _lg.split()[3].point(lambda a: int(a * 0.45))
-            _lg.putalpha(_la2)
-            card.alpha_composite(_lg, (cw//2 - 230, ch//2 - 230))
-        except Exception as e_tlg:
-            log.warning("TON card logo: %s", e_tlg)
-
     y = 36
     # --- عنوان + پرچم + بج LIVE ---
     f_title = _font(44, "b")
@@ -1153,6 +1143,16 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
             cap = "روند ۷ روز گذشته (ساعتی) · زنده"
         cd.text((cw // 2, y), _rtl(_fa(cap)), font=f_cap, fill=GRAY, anchor="mm")
         y += 48
+
+    # 🔷 لوگوی بزرگ تون — وسط کارت، روی نمودار (شفاف، خفن)
+    if code == "TON" and _TON_LOGO_BIG is not None:
+        try:
+            _lg = _TON_LOGO_BIG.resize((440, 440), Image.LANCZOS)
+            _la2 = _lg.split()[3].point(lambda a: int(a * 0.62))
+            _lg.putalpha(_la2)
+            card.alpha_composite(_lg, (cw//2 - 220, ch//2 - 260))
+        except Exception as e_tlg:
+            log.warning("TON card logo: %s", e_tlg)
 
     # ۱۹. نوار موقعیت ۲۴ ساعته (اگه high/low داریم) — در بنر ویدیویی نکش (ناحیه‌ی نمودار آزاد بمونه)
     h24 = data.get("high_24")
