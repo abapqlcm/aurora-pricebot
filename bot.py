@@ -624,7 +624,8 @@ async def _admin_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE, query, data:
 
     elif data == "adm_bc":
         # شروع broadcast — منتظر متن بعدی از ادمین
-        _BC_STATE[admin.OWNER_ID] = True
+        with _BC_STATE_LOCK:
+            _BC_STATE[admin.OWNER_ID] = True
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data="adm_cancel_bc")]])
         await query.edit_message_text(
             "📢 <b>ارسال همگانی</b>\n\nمتن پیام رو بفرست (همون پیام به همه‌ی کاربران می‌ره).\n"
@@ -632,11 +633,13 @@ async def _admin_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE, query, data:
             parse_mode="HTML", reply_markup=kb)
 
     elif data == "adm_cancel_bc":
-        _BC_STATE.pop(admin.OWNER_ID, None)
+        with _BC_STATE_LOCK:
+            _BC_STATE.pop(admin.OWNER_ID, None)
         await query.edit_message_text("✅ ارسال همگانی لغو شد.", reply_markup=_admin_main_kb())
 
 
 _BC_STATE: dict = {}
+_BC_STATE_LOCK = threading.Lock()
 _BOOT_TIME = time.time()
 
 
@@ -659,9 +662,11 @@ async def on_admin_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def on_broadcast_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """اگه ادمین تو حالت broadcast هست، متن = پیام همگانی."""
-    if not _BC_STATE.get(update.effective_user.id):
-        return False
-    _BC_STATE.pop(update.effective_user.id, None)
+    uid = update.effective_user.id
+    with _BC_STATE_LOCK:
+        if not _BC_STATE.get(uid):
+            return False
+        _BC_STATE.pop(uid, None)
     msg = update.message
     targets = admin.all_user_ids()
     ok = fail = 0
@@ -679,7 +684,10 @@ async def on_broadcast_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def on_cancel_bc(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """BUG-4 فیکس: state همیشه پاک می‌شه حتی اگر reply خطا بده (lambda قبلی)."""
-    _BC_STATE.pop(update.effective_user.id, None)
+    user = update.effective_user
+    if user:
+        with _BC_STATE_LOCK:
+            _BC_STATE.pop(user.id, None)
     try:
         await update.message.reply_text("✅ ارسال همگانی لغو شد.")
     except Exception:

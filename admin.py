@@ -44,6 +44,7 @@ def _load():
 
 def _save():
     try:
+        os.makedirs(DATA_DIR, exist_ok=True)
         json.dump(_users, open(USERS_FILE, "w"))
         json.dump(_groups, open(GROUPS_FILE, "w"))
         json.dump(_daily, open(DAILY_FILE, "w"))

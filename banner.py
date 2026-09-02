@@ -288,7 +288,12 @@ def render_banner_video(code: str, duration: float = 2.2, fps: int = 20) -> Opti
     now = time.time()
     hit = _MP4_CACHE.get(ck)
     if hit and now - hit[0] < 60:
-        return hit[1]
+        val = hit[1]
+        if val is None:
+            # پاک کردن کش خراب برای تلاش مجدد
+            del _MP4_CACHE[ck]
+        else:
+            return val
     with _VIDEO_LOCK:
         hit = _MP4_CACHE.get(ck)
         now = time.time()
