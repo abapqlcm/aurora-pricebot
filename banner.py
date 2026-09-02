@@ -938,7 +938,7 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
         else:
             hist = [price * 0.999, price]
 
-    # ---- پس‌زمینه با لوگوی تون ---
+    # ---- پس‌زمینه اختصاصی تون ---
     if code == "TON":
         # پس‌زمینه اختصاصی تون با لوگوی TON
         base = Image.new("RGB", (W, H), (12, 12, 16))
@@ -951,7 +951,11 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
         # دایره بزرگ لوگو با افکت
         bd.ellipse((W//4, H//4, 3*W//4, 3*H//4), fill=(0, 140, 220))
         bd.ellipse((W//4 + 10, H//4 + 10, 3*W//4 - 10, 3*H//4 - 10), outline=(255, 255, 255, 100), width=3)
+        # تنظیم asset_type برای تون
+        asset_type = "crypto"
+        kind = "crypto"
     else:
+        # بقیه ارزها مطابق قبل
         bg = _fetch_bg_image(code)
         kind = None
         asset_type = _asset_type(code)
@@ -976,8 +980,6 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
                 bd.ellipse((W//2-200, H//2-200, W//2+200, H//2+200), outline=(212, 175, 55, 120), width=2)
             except Exception:
                 pass
-    # asset_type برای TON هم تعریف شود
-    asset_type = _asset_type(code)
 
     # ---- کارت شیشه‌ای ----
     card_margin = 60
