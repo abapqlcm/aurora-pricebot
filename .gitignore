@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
-banner_*.png
-assets/*.png
+/banner_*.png
+/assets/*.png
 !assets/logo_circle.png
 .DS_Store
+# استثنا: بنرهای دموی README
+!docs/screenshots/*.png

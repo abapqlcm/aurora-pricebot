@@ -22,7 +22,9 @@ import admin
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-TOKEN = os.getenv("BOT_TOKEN", "")
+# توکن ربات و ID مالک — مستقیماً هاردکد شده (پروژه خصوصی است)
+# اگر BOT_TOKEN در محیط ست نشده باشد، از مقدار پیش‌فرض استفاده می‌شود
+TOKEN = os.getenv("BOT_TOKEN", "***")
 
 
 async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
