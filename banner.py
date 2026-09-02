@@ -939,6 +939,7 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
             hist = [price * 0.999, price]
 
     # ---- پس‌زمینه اختصاصی تون ---
+    _TON_LOGO_BIG = None
     if code == "TON":
         # بک‌گراند خفن تون: تیره آبی + هاله نئون + لوگوی بزرگ نیمه‌شفاف وسط
         base = Image.new("RGB", (W, H), (8, 16, 30))
@@ -957,12 +958,8 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
                             fill=(0, 130, 220, 60))
             blue_glow = blue_glow.filter(ImageFilter.GaussianBlur(80))
             base.alpha_composite(blue_glow)
-            # لوگوی بزرگ نیمه‌شفاف وسط (55٪ شفاف — خفن ولی مزاحم متن نمی‌شه)
-            _logo_big = _ton_logo_full.resize((560, 560), Image.LANCZOS)
-            _la = _logo_big.split()[3].point(lambda a: int(a * 0.55))
-            _logo_big.putalpha(_la)
-            base.alpha_composite(_logo_big, (W//2 - 280, H//2 - 280))
             base = base.convert("RGB")
+            _TON_LOGO_BIG = _ton_logo_full  # برای کشیدن روی کارت (وسط بنر)
         except Exception as e_tonbg:
             log.warning("TON bg: %s", e_tonbg)
             base = base.convert("RGB") if base.mode == "RGBA" else base
@@ -1014,6 +1011,16 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
                               radius=36 + gw // 2, outline=card_outline + (ga,), width=gw)
     glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(6))
     card.alpha_composite(glow_layer)
+
+    # 🔷 لوگوی بزرگ تون — وسط کارت (پشت متن‌ها و نمودار، شفاف)
+    if code == "TON" and _TON_LOGO_BIG is not None:
+        try:
+            _lg = _TON_LOGO_BIG.resize((460, 460), Image.LANCZOS)
+            _la2 = _lg.split()[3].point(lambda a: int(a * 0.45))
+            _lg.putalpha(_la2)
+            card.alpha_composite(_lg, (cw//2 - 230, ch//2 - 230))
+        except Exception as e_tlg:
+            log.warning("TON card logo: %s", e_tlg)
 
     y = 36
     # --- عنوان + پرچم + بج LIVE ---
