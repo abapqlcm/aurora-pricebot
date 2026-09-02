@@ -741,13 +741,11 @@ def _draw_surge_badge(cd, x, y, accent):
 
 def _rollup_digits(img, cx, cy, target, t, unit=""):
     """ایده ۲: انیمیشن roll-up عدد قیمت (فقط ویدیو). t∈[0,1) پیشرفت.
-    فیکس زشتی: از ۹۲٪ قیمت شروع می‌شه و نرم به خودش می‌رسه (نه پرش از صفر) —
-    فقط ۲-۳ رقم آخر می‌چرخن = اودومتر لوکس و آرام."""
+    کاربر: از صفر بره بالا (مثل قبل) ولی «بدون رقم اعشار» — اعداد صحیح نرم."""
     eased = 1 - (1 - t) ** 3
-    # شروع از ۹۲٪ → ارقام بالا ثابت می‌مونن و فقط انتهای عدد رول می‌کنه
-    cur = target * (0.92 + 0.08 * eased)
+    cur = int(round(target * eased))
     d = ImageDraw.Draw(img)
-    txt = f"{_fmt(cur)} {unit if unit == 'دلار' else ''}".strip()
+    txt = f"{cur:,} {unit if unit == 'دلار' else ''}".strip()
     d.text((cx, cy), _rtl(_fa(txt)), font=_font(104, "b"), fill=GOLD_BRIGHT, anchor="mm")
     return img
 

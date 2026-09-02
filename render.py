@@ -182,7 +182,13 @@ def _resolve_text(t: str):
 
 
 def fmt_num(v) -> str:
-    """BUG-3: دقت داینامیک — قیمت‌های خیلی کوچک تا 10 رقم معنادار."""
+    """BUG-3: دقت داینامیک — قیمت‌های خیلی کوچک تا 10 رقم معنادار.
+    BUG-30 فیکس: str اعشاری (مثل «1.27» از _nice) → ValueError نمی‌ده."""
+    if isinstance(v, str):
+        try:
+            v = float(v)
+        except ValueError:
+            return v
     if isinstance(v, float) and 0 < v < 0.01:
         return f"{v:,.10f}".rstrip("0").rstrip(".")
     if isinstance(v, float) and v < 10:

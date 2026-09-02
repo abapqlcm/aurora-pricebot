@@ -206,6 +206,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 # ۲۶. قیمت مچ: قیمتِ لحظه‌ی رندر ویدیو (کپشن = بنر، بدون مغایرت)
                 v_price = banner.get_last_video_price(key)
                 d0 = await loop2.run_in_executor(None, datafeeds.get_banner_data, key)
+                # ۲۹. کریپتو: قیمت تومانی هم تو کپشن (تتر تومانی × قیمت دلاری)
+                _toman = datafeeds.usdt_toman() if d0 and d0.get("unit") != "تومان" else None
                 # ۲۳. حالت GIF: reply_animation — اتوپلی + لوپ بی‌نهایت (بدون دکمه‌ی پخش)
                 # نکته: با bytes خام باید filename بدیم وگرنه تلگرام application/octet-stream نشون می‌ده!
                 try:
@@ -215,7 +217,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                         duration=2,
                         width=900,
                         height=950,
-                        caption=_caption_for(key, d0, price_override=v_price),
+                        caption=_caption_for(key, d0, price_override=v_price, toman=_toman),
                         parse_mode="HTML",
                         reply_markup=_carousel_kb(key),
                     )
@@ -224,7 +226,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_video(
                         vid,
                         filename="aurora_banner.mp4",
-                        caption=_caption_for(key, d0, price_override=v_price),
+                        caption=_caption_for(key, d0, price_override=v_price, toman=_toman),
                         parse_mode="HTML",
                         reply_markup=_carousel_kb(key),
                         supports_streaming=True,
@@ -334,8 +336,9 @@ def _carousel_kb(current: str):
     ]])
 
 
-def _caption_for(key: str, d: dict | None, price_override=None) -> str:
-    """کپشن مشترک برای ویدیو/بنر. price_override → قیمت دقیق همون لحظه‌ی بنر (بدون مغایرت)."""
+def _caption_for(key: str, d: dict | None, price_override=None, toman: float | None = None) -> str:
+    """کپشن مشترک برای ویدیو/بنر. price_override → قیمت دقیق همون لحظه‌ی بنر.
+    toman → قیمت تومانی (برای کریپتوهای دلاری — کاربر خواست)."""
     if not d:
         return "⭐️ AuroraPriceBot"
     unit = d.get("unit", "تومان")
@@ -345,8 +348,12 @@ def _caption_for(key: str, d: dict | None, price_override=None) -> str:
         ohlcv = d.get("ohlcv", [])
         high_24 = max(x[1] for x in ohlcv) if ohlcv else price
         low_24 = min(x[2] for x in ohlcv) if ohlcv else price
+        # ۲۹. خط تومانی برای کریپتو (قیمت لحظه‌ای تتر تومانی × قیمت دلاری)
+        toman_line = ""
+        if toman:
+            toman_line = f"\n🇮🇷 = <b>{render.fmt_num(int(round(price * toman)))} تومان</b>"
         return (
-            f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
+            f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>{toman_line}\n"
             f"<b>{pct:+.2f}%</b>\n"
             f"\n📊 <b>24H High & Low:</b>\n"
             f"<blockquote>🔼 High: ${render.fmt_num(high_24)}\n"
@@ -388,7 +395,9 @@ async def send_price_card(update_or_query, key: str, edit=False):
         return
     # ۲۶. قیمت مچ: کپشن = قیمتِ لحظه‌ی رندر ویدیو
     v_price = banner.get_last_video_price(key)
-    cap = _caption_for(key, d, price_override=v_price)
+    # ۲۹. کریپتو: قیمت تومانی هم تو کپشن
+    _toman = datafeeds.usdt_toman() if d.get("unit") != "تومان" else None
+    cap = _caption_for(key, d, price_override=v_price, toman=_toman)
     kb = _carousel_kb(key)
     if vid:
         if edit:
