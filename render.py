@@ -39,7 +39,7 @@ EXTRA = {
     "بیت کوین": "BTC", "بیتکوین": "BTC", "btc": "BTC", "بیت": "BTC",
     "اتریوم": "ETH", "eth": "ETH", "اتری": "ETH",
     "سولانا": "SOL", "sol": "SOL",
-    "تون": "TON", "ton": "TON", "تونکوین": "TON",
+    "تون": "TON", "ton": "TON", "تونکوین": "TON", "گرم تون": "TON", "گرام": "TON",
     "دوج": "DOGE", "دوجکوین": "DOGE", "doge": "DOGE",
     "شیبا": "SHIB", "shib": "SHIB",
     "ریپل": "XRP", "xrp": "XRP",
