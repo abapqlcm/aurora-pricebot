@@ -296,7 +296,18 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                     unit = d.get("unit", "تومان")
                     price = d.get("price") or 0
                     total = amount * price
-                    if unit == "تومان":
+                    if key == "TON":
+                        # محاسبه تومانی برای تون
+                        toman_price = datafeeds.usdt_toman() or 0
+                        total_toman = amount * price * toman_price
+                        cap = (
+                            f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>\n"
+                            f"≈ <b>{render.fmt_num(int(round(price * toman_price)))} تومان</b>\n"
+                            f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>${render.fmt_num(total)}</b>\n"
+                            f"≈ <b>{render.fmt_num(int(round(total * toman_price)))} تومان</b>\n"
+                            f"🕐 Update: {render._now_en()}"
+                        )
+                    elif unit == "تومان":
                         cap = (
                             f"⭐️ 1 {d['name']} = <b>{render.fmt_num(price)}</b>\n"
                             f"💱 {render.fmt_num(render._nice(amount))} {d['name']} = <b>{render.fmt_num(int(total))}</b>\n"
@@ -348,7 +359,23 @@ def _caption_for(key: str, d: dict | None, price_override=None, toman: float | N
     unit = d.get("unit", "تومان")
     price = price_override if price_override is not None else (d.get("price") or 0)
     pct = d.get("change_pct") or 0
-    if unit != "تومان":
+    if key == "TON":
+        ohlcv = d.get("ohlcv", [])
+        high_24 = max(x[1] for x in ohlcv) if ohlcv else price
+        low_24 = min(x[2] for x in ohlcv) if ohlcv else price
+        # ۲۹. خط تومانی برای تون (قیمت لحظه‌ای تتر تومانی × قیمت دلاری)
+        toman_line = ""
+        if toman:
+            toman_line = f"\n≈ <b>{render.fmt_num(int(round(price * toman)))} تومان</b>"
+        return (
+            f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>{toman_line}\n"
+            f"<b>{pct:+.2f}%</b>\n"
+            f"\n📊 <b>24H High & Low:</b>\n"
+            f"<blockquote>🔼 High: ${render.fmt_num(high_24)}\n"
+            f"🔽 Low: ${render.fmt_num(low_24)}</blockquote>\n"
+            f"\n🕐 Update: {render._now_en()}"
+        )
+    elif unit != "تومان":
         ohlcv = d.get("ohlcv", [])
         high_24 = max(x[1] for x in ohlcv) if ohlcv else price
         low_24 = min(x[2] for x in ohlcv) if ohlcv else price

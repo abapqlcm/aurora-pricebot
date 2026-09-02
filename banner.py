@@ -938,31 +938,46 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
         else:
             hist = [price * 0.999, price]
 
-    # پس‌زمینه
-    bg = _fetch_bg_image(code)
-    kind = None
-    asset_type = _asset_type(code)  # ۳. تعیین نوع ارز برای رنگ‌بندی
-    if bg is None:
-        _, kind, key = catalog.asset_urls(code)
-    if asset_type == "gold" and bg is None:
-        # ۲۷. طلا/سکه — پس‌زمینه‌ی لوکس طلایی (گرادیان + اشعه + bokeh)
-        base = _get_gold_bg().copy()
-    elif bg is not None:
-        base = _blurred_bg(bg, color_type=asset_type)  # رنگ متغیر!
-    else:
-        # طلا/سکه/آیکون‌های گمشده — پس‌زمینه‌ی مشکی‌طلایی خالص
+    # ---- پس‌زمینه با لوگوی تون ---
+    if code == "TON":
+        # پس‌زمینه اختصاصی تون با لوگوی TON
         base = Image.new("RGB", (W, H), (12, 12, 16))
         bd = ImageDraw.Draw(base)
+        # گرادیان پس‌زمینه آبی تون
         for y in range(H):
             t = y / H
-            c = (int(12 + 20 * t), int(12 + 14 * t), int(16))
+            c = (int(0 + 8 * t), int(168 - 20 * t), int(238 - 40 * t))
             bd.line([(0, y), (W, y)], fill=c)
-        # لوگوی بزرگ‌تر در پس‌زمینه
-        try:
-            bd.ellipse((W//2-260, H//2-260, W//2+260, H//2+260), outline=(212, 175, 55), width=6)
-            bd.ellipse((W//2-200, H//2-200, W//2+200, H//2+200), outline=(212, 175, 55, 120), width=2)
-        except Exception:
-            pass
+        # دایره بزرگ لوگو با افکت
+        bd.ellipse((W//4, H//4, 3*W//4, 3*H//4), fill=(0, 140, 220))
+        bd.ellipse((W//4 + 10, H//4 + 10, 3*W//4 - 10, 3*H//4 - 10), outline=(255, 255, 255, 100), width=3)
+    else:
+        bg = _fetch_bg_image(code)
+        kind = None
+        asset_type = _asset_type(code)
+        if bg is None:
+            _, kind, key = catalog.asset_urls(code)
+        if asset_type == "gold" and bg is None:
+            # ۲۷. طلا/سکه — پس‌زمینه‌ی لوکس طلایی (گرادیان + اشعه + bokeh)
+            base = _get_gold_bg().copy()
+        elif bg is not None:
+            base = _blurred_bg(bg, color_type=asset_type)  # رنگ متغیر!
+        else:
+            # طلا/سکه/آیکون‌های گمشده — پس‌زمینه‌ی مشکی‌طلایی خالص
+            base = Image.new("RGB", (W, H), (12, 12, 16))
+            bd = ImageDraw.Draw(base)
+            for y in range(H):
+                t = y / H
+                c = (int(12 + 20 * t), int(12 + 14 * t), int(16))
+                bd.line([(0, y), (W, y)], fill=c)
+            # لوگوی بزرگ‌تر در پس‌زمینه
+            try:
+                bd.ellipse((W//2-260, H//2-260, W//2+260, H//2+260), outline=(212, 175, 55), width=6)
+                bd.ellipse((W//2-200, H//2-200, W//2+200, H//2+200), outline=(212, 175, 55, 120), width=2)
+            except Exception:
+                pass
+    # asset_type برای TON هم تعریف شود
+    asset_type = _asset_type(code)
 
     # ---- کارت شیشه‌ای ----
     card_margin = 60
