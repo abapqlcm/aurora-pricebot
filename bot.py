@@ -351,7 +351,7 @@ def _caption_for(key: str, d: dict | None, price_override=None, toman: float | N
         # ۲۹. خط تومانی برای کریپتو (قیمت لحظه‌ای تتر تومانی × قیمت دلاری)
         toman_line = ""
         if toman:
-            toman_line = f"\n🇮🇷 = <b>{render.fmt_num(int(round(price * toman)))} تومان</b>"
+            toman_line = f"\n≈ <b>{render.fmt_num(int(round(price * toman)))} تومان</b>"
         return (
             f"⭐️ 1 {d['name']} = <b>${render.fmt_num(price)}</b>{toman_line}\n"
             f"<b>{pct:+.2f}%</b>\n"
