@@ -448,9 +448,12 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
                     chart_bot = chart_y0 + chart_h - PAD_B
                     poly = list(pts) + [(pts[-1][0], chart_bot),
                                         (pts[0][0], chart_bot)]
-                    mask = _CHART_CLIP_MASK.copy()
+                    mask = Image.new("L", (w, h), 0)
                     md = ImageDraw.Draw(mask)
                     md.polygon(poly, fill=52)
+                    # clip به کادر نمودار (AND با ماسک clip — سریع)
+                    from PIL import ImageChops as _ic2
+                    mask = _ic2.darker(mask, _CHART_CLIP_MASK)
                     grad = Image.new("RGBA", (w, h), (0, 0, 0, 0))
                     gd4 = ImageDraw.Draw(grad)
                     yy0 = max(int(min(p[1] for p in pts)), int(chart_top))
