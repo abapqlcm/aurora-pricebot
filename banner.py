@@ -116,7 +116,7 @@ def _blurred_bg(img: Image.Image, color_type: str = "fiat") -> Image.Image:
         y0 = (sh - nh) // 2
         img = img.crop((0, y0, sw, y0 + nh))
     img = img.resize((W, H), Image.LANCZOS)
-    img = img.filter(ImageFilter.GaussianBlur(28))
+    img = img.filter(ImageFilter.GaussianBlur(34))
     
     # ۲. تم تاریک با رنگ‌های متغیر
     colors = COLORS_BY_TYPE.get(color_type, COLORS_BY_TYPE["fiat"])
@@ -433,6 +433,18 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
                     _draw_particles(d, w, h, t, accent_color, seed=42)
                 except Exception as e_p:
                     log.warning("particles frame: %s", e_p)
+                # ۱۰. پالس لوگو — هاله‌ی دایره‌ای دور لوگوی گوشه (موج نرم + محو)
+                try:
+                    import math as _m
+                    lx, ly, lr = w - 100, h - 105, 46  # مرکز لوگو
+                    _pulse = (t * math.pi * 2) % (2 * math.pi)
+                    _ring_r = lr + 10 + int(26 * (0.5 + 0.5 * _m.sin(_pulse)))
+                    _ring_a = int(120 * (0.5 - 0.5 * _m.sin(_pulse)))
+                    if _ring_a > 4:
+                        d.ellipse((lx - _ring_r, ly - _ring_r, lx + _ring_r, ly + _ring_r),
+                                  outline=accent_color[:3] + (_ring_a,), width=2)
+                except Exception as e_pc:
+                    log.warning("logo pulse frame: %s", e_pc)
                 # ایده ۲: roll-up قیمت — ۴۰٪ اول انیمیت، بعد ثابت
                 try:
                     _rollup_digits(img, w // 2, 50 + 36 + 110 + 56, data["price"],
@@ -629,6 +641,52 @@ def _get_gold_bg() -> Image.Image:
     if _GOLD_BG_CACHE is None:
         _GOLD_BG_CACHE = _gold_lux_bg()
     return _GOLD_BG_CACHE
+
+
+def _apply_asset_theme(base: Image.Image, asset_type: str) -> Image.Image:
+    """۸. تم تخصصی هر دسته — لایه‌های پس‌زمینه با هویت بصری مجزا.
+    بدون تغییر ساختار، فقط افکت روی base (امن برای ویدیو/PNG)."""
+    if asset_type == "crypto":
+        # شبکه/سیرکوئیت: گرید نقطه‌ای + گره‌های متصل (بنفش ملایم)
+        img = base.convert("RGBA")
+        ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        od = ImageDraw.Draw(ov)
+        step = 90
+        for gx in range(0, W + step, step):
+            for gy in range(0, H + step, step):
+                od.ellipse((gx - 2, gy - 2, gx + 2, gy + 2), fill=(180, 100, 255, 26))
+        # خطوط اتصال محدود (بین گره‌های مجاور افقی)
+        for gx in range(0, W + step, step):
+            for gy in range(0, H + step, step):
+                if gx + step <= W + step:
+                    od.line([(gx, gy), (gx + step, gy)], fill=(180, 100, 255, 12), width=1)
+        ov = ov.filter(ImageFilter.GaussianBlur(1))
+        img.alpha_composite(ov)
+        return img.convert("RGB")
+    if asset_type == "stable":
+        # هاله‌ی سبز ملایم از پایین (تری/استیبل)
+        img = base.convert("RGBA")
+        ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        od = ImageDraw.Draw(ov)
+        for yy in range(H):
+            t = 1 - yy / H
+            a = int(18 * t * t)
+            if a > 0:
+                od.line([(0, yy), (W, yy)], fill=(100, 255, 150, a))
+        img.alpha_composite(ov)
+        return img.convert("RGB")
+    if asset_type == "fiat":
+        # خطوط موج ظریف ارزی (آبی) — نوارهای افقی ملایم
+        img = base.convert("RGBA")
+        ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        od = ImageDraw.Draw(ov)
+        for yy in range(120, H, 220):
+            a = 10
+            od.line([(0, yy), (W, yy)], fill=(70, 150, 255, a), width=2)
+        img.alpha_composite(ov)
+        return img.convert("RGB")
+    return base
+
 
 
 def _draw_24h_range_bar(cd, x0, x1, y, low, high, price, accent):
@@ -1006,6 +1064,12 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
             except Exception:
                 pass
 
+    # ۸. تم تخصصی هر دسته (شبکه کریپتو / هاله تتر / موج ارز) روی پس‌زمینه
+    try:
+        base = _apply_asset_theme(base, asset_type)
+    except Exception as e_th:
+        log.warning("asset theme: %s", e_th)
+
     # ---- کارت شیشه‌ای ----
     card_margin = 60
     card = Image.new("RGBA", (W - card_margin * 2, H - card_margin * 2 - 40), (0, 0, 0, 0))
@@ -1016,8 +1080,8 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
     colors = COLORS_BY_TYPE.get(asset_type, COLORS_BY_TYPE["fiat"])
     card_outline = colors["accent"]  # حاشیه رنگی
     
-    # کارت نیمه‌شفاف + حاشیه رنگی — گلاس‌مورفیسم واقعی (شفاف‌تر)
-    cd.rounded_rectangle((0, 0, cw - 1, ch - 1), radius=36, fill=(16, 16, 24, 178),
+    # کارت نیمه‌شفاف + حاشیه رنگی — گلاس‌مورفیسم واقعی (شفاف‌تر + مات‌تر)
+    cd.rounded_rectangle((0, 0, cw - 1, ch - 1), radius=36, fill=(16, 16, 24, 110),
                          outline=card_outline + (200,), width=3)  # width=3 برای نیون
     
     # ۱۴. نیون گلو — هاله‌ی نور دور کارت (چند لایه outline محو)
