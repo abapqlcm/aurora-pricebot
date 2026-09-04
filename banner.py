@@ -1176,11 +1176,11 @@ def _render_banner_uncached(code: str, ck: str, now: float, no_chart: bool = Fal
             cd.text((cw // 2, y + 122 + 23), _rtl(_fa(chip_txt)), font=f_chip, fill=GRAY, anchor="mm")
     y += 190
 
-    # ۱۶. بازه خرید/فروش صرافی (اگه Alanchand داره)
-    y_chip = y  # محل چیپ — برای بج جهش (ایده ۷)
+    # بازه خرید/فروش صرافی (حذف شد — Alanchand پاک شد؛ فقط درصد ۲۴س)
+    y_chip = y
     buy_v = data.get("buy")
     sell_v = data.get("sell")
-    if buy_v and sell_v and buy_v != sell_v:
+    if False and buy_v and sell_v and buy_v != sell_v:
         f_bs = _font(24, "b")
         bs_txt = f"فروش {render_fa_num(sell_v)}  ·  خرید {render_fa_num(buy_v)}"
         tw = cd.textlength(_rtl(_fa(bs_txt)), font=f_bs)
