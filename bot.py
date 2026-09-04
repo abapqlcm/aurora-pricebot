@@ -24,7 +24,10 @@ log = logging.getLogger(__name__)
 
 # توکن ربات و ID مالک — مستقیماً هاردکد شده (پروژه خصوصی است)
 # اگر BOT_TOKEN در محیط ست نشده باشد، از مقدار پیش‌فرض استفاده می‌شود
-TOKEN = os.getenv("BOT_TOKEN", "8998216390:AAGiUZUmMXdnwcsVsDegPOlgzPPxVafNGAw")
+TOKEN = os.getenv("BOT_TOKEN")
+if not TOKEN:
+    log.error("BOT_TOKEN is missing! Set it in Railway variables.")
+    raise SystemExit("Missing BOT_TOKEN")
 
 
 async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
