@@ -136,28 +136,59 @@ def binance_24h_change(symbol: str) -> Optional[float]:
 # ---------------- Wallex (بازار آزاد ایران — لایو) ----------------
 
 def _wallex_otc(side: str = "SELL") -> Optional[float]:
-    """قیمت لحظهای OTC والکس — همون قیمتی که wallex.ir نشون میده (TTL 5s).
-    SELL = قیمت فروش به کاربر (۲۱۷k الان)، BUY = خرید از کاربر.
-    برای دلار/تتر از SELL استفاده میکنیم چون wallex.ir هم SELL نشون میده."""
-    def fetch():
+    """قیمت لحظهای OTC والکس — شاخص wPrice (همون قیمت بخش خرید/فروش، لایو).
+    ۱. coin-market-list?baseAsset=USDT → quotes.TMN.wPrice (شاخص خام OTC — منبع dailyHigh/Low)
+    ۲. fallback: /v1/otc/price?side=SELL
+    هر دو خام هستن — بدون سود ۰.۵٪."""
+    now = time.time()
+    key = f"wallex_otc_{side}"
+
+    def _from_index():
+        try:
+            r = _get("https://api.wallex.ir/v1/coin-market-list?baseAsset=USDT&fields=baseAsset,quotes.TMN.wPrice,quotes.TMN.dailyHighPrice,quotes.TMN.dailyLowPrice", timeout=8)
+            for m in r.json().get("result", {}).get("markets", []):
+                if m.get("baseAsset") == "USDT":
+                    w = m.get("quotes", {}).get("TMN", {}).get("wPrice")
+                    return float(w) if w else None
+        except Exception as e:
+            log.warning("wallex index: %s", e)
+        return None
+
+    def _from_otc_api():
         try:
             r = _get(f"https://api.wallex.ir/v1/otc/price?symbol=USDTTMN&side={side}", timeout=8)
-            j = r.json()
-            p = j.get("result", {}).get("price")
+            p = r.json().get("result", {}).get("price")
             return float(p) if p else None
         except Exception as e:
             log.warning("wallex otc %s: %s", side, e)
             return None
-    # کش جدا با TTL کوتاه — نمیخوایم با markets قاطی شه
-    now = time.time()
-    key = f"wallex_otc_{side}"
+
     hit = _cache.get(key)
     if hit and now - hit[0] < 3:  # ۳ ثانیه — کوچکترین نوسان هم دیده شه
         return hit[1]
-    v = fetch()
+    # فالبک BUY هم از شاخص (فقط کوتیشن SELL رو ضرب‌در اسپرد میکنه — نمایشی)
+    v = _from_index() if side == "SELL" else _from_otc_api()
     if v:
         _cache[key] = (now, v)
     return v
+
+
+def wallex_index_high_low() -> Tuple[Optional[float], Optional[float]]:
+    """سقف/کف ۲۴ ساعته‌ی شاخص OTC والکس — کاملا خام (بدون سود ۰.۵٪).
+    منبع رسمی: quotes.TMN.dailyHighPrice / dailyLowPrice از coin-market-list."""
+    def fetch():
+        try:
+            r = _get("https://api.wallex.ir/v1/coin-market-list?baseAsset=USDT&fields=baseAsset,quotes.TMN.dailyHighPrice,quotes.TMN.dailyLowPrice", timeout=8)
+            for m in r.json().get("result", {}).get("markets", []):
+                if m.get("baseAsset") == "USDT":
+                    t = m.get("quotes", {}).get("TMN", {})
+                    hi = float(t.get("dailyHighPrice") or 0) or None
+                    lo = float(t.get("dailyLowPrice") or 0) or None
+                    return (hi, lo)
+        except Exception as e:
+            log.warning("wallex hi/lo: %s", e)
+        return (None, None)
+    return _cached("wallex_hilo", fetch)
 
 def _wallex_markets() -> dict:
     """نمادهای والکس — کش ۵ ثانیهای (لایو)."""
@@ -320,10 +351,28 @@ def get_banner_data(code: str) -> Optional[dict]:
 
     if code in catalog.STABLE:
         name, tg_id, _ = catalog.STABLE[code]
-        # تتر = OTC والکس لایو (۵s — همون wallex.ir) + ۰.۵٪ سود مثل دلار
-        otc = usdt_toman()  # همین الان OTC لایو (خام ۲۱۷k)
-        last = round(otc * 1.005) if otc else None  # با سود مثل دلار
+        # تتر = شاخص OTC والکس (wPrice لایو — همون بخش خرید) + ۰.۵٪ سود مثل دلار
+        otc = usdt_toman()  # wPrice خام لایو (۲۱۶k)
+        last = round(otc * 1.005) if otc else None  # قیمت نمایشی با سود
         _, ch, high_w = wallex_quote("USDTTMN")
+        # های/لو ۲۴h از شاخص رسمی والکس — کاملا خام بدون سود (کپشن)
+        hi_i, lo_i = wallex_index_high_low()
+        if last and hi_i and lo_i:
+            high_24, low_24 = round(hi_i), round(lo_i)
+            # fake ohlcv برای chart — [open, high, low, close] مثل بایننس
+            ohlcv = [
+                [low_24, high_24, low_24, low_24],
+                [low_24, high_24, low_24, last],
+                [last, high_24, low_24, last]
+            ]
+            return {
+                "name": name, "price": last, "change_pct": ch,
+                "change_abs": None,
+                "high_24": high_24, "low_24": low_24,
+                "history": [x / 10 for x in tgju_history(tg_id)],
+                "ohlcv": ohlcv,
+                "unit": "تومان", "source": "Wallex OTC (لایو) +۰.۵٪",
+            }
         if last:
             # از همان quote کشدار high/low بگیر (بدون درخواست تکراری)
             try:
