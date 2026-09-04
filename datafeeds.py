@@ -330,8 +330,9 @@ def get_banner_data(code: str) -> Optional[dict]:
                 syms = _wallex_markets()
                 usdt_data = syms.get('USDTTMN', {})
                 stats = usdt_data.get('stats', {})
-                high_24 = round(float(stats.get('24h_highPrice', last)) * 1.005) if stats.get('24h_highPrice') else last
-                low_24 = round(float(stats.get('24h_lowPrice', last)) * 1.005) if stats.get('24h_lowPrice') else last
+                # های/لو ۲۴h خام والکس — بدون سود ۰.۵٪ (همون که سایت wallex.ir نشون میده)
+                high_24 = round(float(stats.get('24h_highPrice', last))) if stats.get('24h_highPrice') else last
+                low_24 = round(float(stats.get('24h_lowPrice', last))) if stats.get('24h_lowPrice') else last
                 # fake ohlcv برای chart — ساختار [open, high, low, close] مثل بایننس
                 ohlcv = [
                     [low_24, high_24, low_24, low_24],
