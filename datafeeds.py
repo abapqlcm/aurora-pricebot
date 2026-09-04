@@ -253,8 +253,11 @@ def get_banner_data(code: str) -> Optional[dict]:
                 "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
                 "unit": "تومان", "source": "Alanchand (بازار روز)",
             }
-        # ۳) Wallex + Binance (لایو)
+        # ۳) Wallex + Binance (لایو ۳ثانیه + ۰.۵٪ سود بازار)
         usdt_t = usdt_toman()
+        # ۰.۵٪ سود بازار آزاد
+        if usdt_t:
+            usdt_t = round(usdt_t * 1.005)
         price = None
         pct = None
         if code == "dollar":
