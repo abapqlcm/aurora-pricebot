@@ -219,7 +219,7 @@ def fx_to_usd(ccy: str) -> Optional[float]:
 
 # ---------------- واحد یکپارچه ----------------
 
-# کد داخلی → کد ISO واقعی برای er-api (بقیهٔ کلیدها از قبل ISO هستن)
+# کد داخلی → کد ISO واقعی برای er-api — نگه داشته شد (فعلاً استفاده نمیشه، ولی بمونه)
 _FIAT_ISO = {"dollar": "USD", "euro": "EUR", "pound": "GBP"}
 
 
@@ -233,24 +233,8 @@ def get_banner_data(code: str) -> Optional[dict]:
         return None
     if code in catalog.FIAT:
         name, _, tg_id, fx_sym = catalog.FIAT[code]
-        # ۱) قیمت لایو بازار آزاد: USDTTMN والکس × نرخ جهانی er-api (همه‌ی ارزها، یک روش)
-        usdt_t = usdt_toman()
-        v = fx_to_usd(_FIAT_ISO.get(code, code))  # dollar→USD, euro→EUR, بقیه همون کد
+        # ۱) اول بازار روز از Alanchand (خرید/فروش صرافی)
         al = alanchand.get_price(code)
-        if usdt_t and v:
-            price = round(usdt_t * v)
-            # چیپ خرید/فروش صرافی از Alanchand (اختیاری — فقط دکور)
-            out = {
-                "name": name, "price": price,
-                "change_pct": None, "change_abs": None,
-                "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
-                "unit": "تومان", "source": "Wallex+er-api (لایو)",
-            }
-            if al:
-                out["buy"] = al["buy"]
-                out["sell"] = al["sell"]
-            return out
-        # ۲) fallback: Alanchand (خرید/فروش صرافی) — اگه والکس/er-api نبود
         if al:
             return {
                 "name": name, "price": al["sell"], "change_pct": None,
@@ -259,14 +243,36 @@ def get_banner_data(code: str) -> Optional[dict]:
                 "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
                 "unit": "تومان", "source": "Alanchand (بازار روز)",
             }
-        # ۳) fallback نهایی: TGJU (ممکنه کند باشه)
-        p, dp, d = tgju_quote(tg_id)
-        hist_rial = tgju_history(tg_id)
-        hist = [x / 10 for x in hist_rial]
+        # ۲) fallback: Wallex + Binance (لایو)
+        usdt_t = usdt_toman()
+        price = None
+        pct = None
+        if code == "dollar":
+            price = round(usdt_t) if usdt_t else None
+            _, pct, _ = wallex_quote("USDTTMN")
+        elif tg_id is None:
+            v = fx_to_usd(code)
+            if usdt_t and v:
+                price = round(usdt_t * v)
+        elif usdt_t and fx_sym:
+            rate = binance_fx_rate(fx_sym)
+            if rate:
+                price = round(usdt_t * rate)
+        if price is None:
+            # ۳) fallback نهایی: TGJU
+            p, dp, d = tgju_quote(tg_id)
+            hist_rial = tgju_history(tg_id)
+            hist = [x / 10 for x in hist_rial]
+            return {
+                "name": name, "price": (p // 10 if p else None), "change_pct": dp,
+                "change_abs": (d // 10 if d else None),
+                "history": hist, "unit": "تومان", "source": "TGJU",
+            }
         return {
-            "name": name, "price": (p // 10 if p else None), "change_pct": dp,
-            "change_abs": (d // 10 if d else None),
-            "history": hist, "unit": "تومان", "source": "TGJU",
+            "name": name, "price": price, "change_pct": pct,
+            "change_abs": None,
+            "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
+            "unit": "تومان", "source": "Wallex+Binance (لایو)",
         }
 
     if code in catalog.GOLD:
