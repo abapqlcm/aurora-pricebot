@@ -121,7 +121,8 @@ async def _prefetch(ctx: ContextTypes.DEFAULT_TYPE, keys: list):
     asyncio.get_running_loop().run_in_executor(None, _job)
 
 
-HOT_KEYS = ["dollar", "euro", "BTC", "usdt", "gold_18", "pound", "try", "aed", "SOL", "ETH", "TON"]
+# اولویت با پرتقاضاتره — warm loop زودتر نرم میکنه
+HOT_KEYS = ["dollar", "usdt", "euro", "BTC", "gold_18", "pound", "TON", "try", "aed", "SOL", "ETH"]
 
 # ۱۲. قفل کلی برای دسترسی‌های هم‌زمان به کش‌ها/فایل‌ها (thread-safe)
 _warm_lock = threading.Lock()
@@ -149,7 +150,7 @@ async def _warm_loop(ctx: ContextTypes.DEFAULT_TYPE):
             await asyncio.get_running_loop().run_in_executor(None, _job)
         except Exception as e:
             log.warning("warm loop: %s", e)
-        await asyncio.sleep(7)
+        await asyncio.sleep(4)
 
 
 async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):

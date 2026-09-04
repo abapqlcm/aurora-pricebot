@@ -135,78 +135,44 @@ def binance_24h_change(symbol: str) -> Optional[float]:
 
 # ---------------- Wallex (بازار آزاد ایران — لایو) ----------------
 
-def _wallex_otc(side: str = "SELL") -> Optional[float]:
-    """قیمت لحظهای OTC والکس — شاخص wPrice (همون قیمت بخش خرید/فروش، لایو).
-    ۱. coin-market-list?baseAsset=USDT → quotes.TMN.wPrice (شاخص خام OTC — منبع dailyHigh/Low)
-    ۲. fallback: /v1/otc/price?side=SELL
-    هر دو خام هستن — بدون سود ۰.۵٪."""
-    now = time.time()
-    key = f"wallex_otc_{side}"
+# ⚡ سرعت: یک کال واحد به coin-market-list → همه‌ی قیمت‌های والکس (خرید/شاخص/های/لو/٪)
+# قبلاً ۳ تابع جدا هر کدوم ~۴۰۰-۵۵۰ms کال میزدن → الان فقط ۱ کال (۵۵۰ms) برای هر ۳ تابع
+_WALLEX_URL = ("https://api.wallex.ir/v1/coin-market-list?baseAsset=USDT&fields="
+               "baseAsset,quotes.TMN.price,quotes.TMN.wPrice,"
+               "quotes.TMN.dailyHighPrice,quotes.TMN.dailyLowPrice,quotes.TMN.percentChange24h")
 
-    def _from_index():
+def wallex_usdt_quote() -> dict:
+    """یک کال — کل کوتیشن تتر والکس:
+    {buy, index, high, low, ch} | {} اگه خطا."""
+    def fetch():
         try:
-            r = _get("https://api.wallex.ir/v1/coin-market-list?baseAsset=USDT&fields=baseAsset,quotes.TMN.wPrice,quotes.TMN.dailyHighPrice,quotes.TMN.dailyLowPrice", timeout=8)
+            r = _get(_WALLEX_URL, timeout=8)
             for m in r.json().get("result", {}).get("markets", []):
                 if m.get("baseAsset") == "USDT":
-                    w = m.get("quotes", {}).get("TMN", {}).get("wPrice")
-                    return float(w) if w else None
+                    t = m.get("quotes", {}).get("TMN", {})
+                    return {
+                        "buy": float(t.get("price") or 0) or None,       # قیمت خرید (۲۱۸k)
+                        "index": float(t.get("wPrice") or 0) or None,    # شاخص OTC (۲۱۷k)
+                        "high": float(t.get("dailyHighPrice") or 0) or None,
+                        "low": float(t.get("dailyLowPrice") or 0) or None,
+                        "ch": float(t.get("percentChange24h") or 0),
+                    }
         except Exception as e:
-            log.warning("wallex index: %s", e)
-        return None
-
-    def _from_otc_api():
-        try:
-            r = _get(f"https://api.wallex.ir/v1/otc/price?symbol=USDTTMN&side={side}", timeout=8)
-            p = r.json().get("result", {}).get("price")
-            return float(p) if p else None
-        except Exception as e:
-            log.warning("wallex otc %s: %s", side, e)
-            return None
-
-    hit = _cache.get(key)
-    if hit and now - hit[0] < 3:  # ۳ ثانیه — کوچکترین نوسان هم دیده شه
-        return hit[1]
-    # فالبک BUY هم از شاخص (فقط کوتیشن SELL رو ضرب‌در اسپرد میکنه — نمایشی)
-    v = _from_index() if side == "SELL" else _from_otc_api()
-    if v:
-        _cache[key] = (now, v)
-    return v
+            log.warning("wallex usdt: %s", e)
+        return {}
+    return _cached("wallex_usdt", fetch)
 
 
 def wallex_buy_quote() -> Tuple[Optional[float], Optional[float]]:
-    """(قیمت خرید والکس، تغییر ۲۴h٪) — همون عدد بخش «خرید ارز» (price، لایو).
-    این قیمت خودش حاشیه والکس رو داره — بدون سود اضافه."""
-    def fetch():
-        try:
-            r = _get("https://api.wallex.ir/v1/coin-market-list?baseAsset=USDT&fields=baseAsset,quotes.TMN.price,quotes.TMN.percentChange24h", timeout=8)
-            for m in r.json().get("result", {}).get("markets", []):
-                if m.get("baseAsset") == "USDT":
-                    t = m.get("quotes", {}).get("TMN", {})
-                    p = float(t.get("price") or 0) or None
-                    ch = float(t.get("percentChange24h") or 0)
-                    return (p, ch)
-        except Exception as e:
-            log.warning("wallex buy: %s", e)
-        return (None, None)
-    return _cached("wallex_buy", fetch)
+    """(قیمت خرید والکس، تغییر ۲۴h٪) — از کوتیشن واحد (بدون کال تکراری)."""
+    q = wallex_usdt_quote()
+    return q.get("buy"), q.get("ch")
 
 
 def wallex_index_high_low() -> Tuple[Optional[float], Optional[float]]:
-    """سقف/کف ۲۴ ساعته‌ی شاخص OTC والکس — کاملا خام (بدون سود ۰.۵٪).
-    منبع رسمی: quotes.TMN.dailyHighPrice / dailyLowPrice از coin-market-list."""
-    def fetch():
-        try:
-            r = _get("https://api.wallex.ir/v1/coin-market-list?baseAsset=USDT&fields=baseAsset,quotes.TMN.dailyHighPrice,quotes.TMN.dailyLowPrice", timeout=8)
-            for m in r.json().get("result", {}).get("markets", []):
-                if m.get("baseAsset") == "USDT":
-                    t = m.get("quotes", {}).get("TMN", {})
-                    hi = float(t.get("dailyHighPrice") or 0) or None
-                    lo = float(t.get("dailyLowPrice") or 0) or None
-                    return (hi, lo)
-        except Exception as e:
-            log.warning("wallex hi/lo: %s", e)
-        return (None, None)
-    return _cached("wallex_hilo", fetch)
+    """سقف/کف ۲۴ ساعته‌ی شاخص OTC — خام، از کوتیشن واحد."""
+    q = wallex_usdt_quote()
+    return q.get("high"), q.get("low")
 
 def _wallex_markets() -> dict:
     """نمادهای والکس — کش ۵ ثانیهای (لایو)."""
@@ -236,9 +202,8 @@ def wallex_quote(symbol: str) -> Tuple[Optional[float], Optional[float], Optiona
 
 
 def usdt_toman() -> float:
-    """قیمت لحظهای تتر تومانی — OTC والکس (همون قیمت سایت wallex.ir، لایو ۵ثانیه).
-    fallback: markets lastPrice اگر OTC در دسترس نبود."""
-    p = _wallex_otc("SELL")
+    """شاخص OTC والکس (wPrice — خام لایو). fallback: markets lastPrice."""
+    p = wallex_usdt_quote().get("index")
     if p:
         return p
     last, _, _ = wallex_quote("USDTTMN")
@@ -323,7 +288,7 @@ def get_banner_data(code: str) -> Optional[dict]:
         pct = None
         if code == "dollar":
             price = round(buy_p) if buy_p else None  # خام خرید — مثل تتر
-            _, pct, _ = wallex_quote("USDTTMN")
+            pct = wallex_usdt_quote().get("ch")  # از کوتیشن واحد — بدون کال دوم
         elif fx_sym:
             rate = binance_fx_rate(fx_sym)
             if usdt_t and rate:
