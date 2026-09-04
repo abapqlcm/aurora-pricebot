@@ -18,7 +18,7 @@ log = logging.getLogger("data")
 
 UA = {"User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
 _cache = {}
-CACHE_TTL = 20  # کش کوتاه برای سرعت (قیمت هنوز کاملاً زنده)
+CACHE_TTL = 10  # کش خیلی کوتاه — قیمت واقعاً لایو (تغییرات سریع دیده بشه)
 
 
 def _get(url, timeout=12):
@@ -219,6 +219,10 @@ def fx_to_usd(ccy: str) -> Optional[float]:
 
 # ---------------- واحد یکپارچه ----------------
 
+# کد داخلی → کد ISO واقعی برای er-api (بقیهٔ کلیدها از قبل ISO هستن)
+_FIAT_ISO = {"dollar": "USD", "euro": "EUR", "pound": "GBP"}
+
+
 def get_banner_data(code: str) -> Optional[dict]:
     """
     برای هر کد داخل catalog، داده‌ی کامل بنر را می‌سازد:
@@ -231,7 +235,7 @@ def get_banner_data(code: str) -> Optional[dict]:
         name, _, tg_id, fx_sym = catalog.FIAT[code]
         # ۱) قیمت لایو بازار آزاد: USDTTMN والکس × نرخ جهانی er-api (همه‌ی ارزها، یک روش)
         usdt_t = usdt_toman()
-        v = fx_to_usd(code)  # 1 واحد ارز چند دلار (dollar → 1.0)
+        v = fx_to_usd(_FIAT_ISO.get(code, code))  # dollar→USD, euro→EUR, بقیه همون کد
         al = alanchand.get_price(code)
         if usdt_t and v:
             price = round(usdt_t * v)
