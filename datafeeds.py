@@ -12,8 +12,6 @@ from typing import List, Optional, Tuple
 import requests
 
 import catalog
-import kifpool
-import alanchand
 
 log = logging.getLogger("data")
 
@@ -234,28 +232,8 @@ def get_banner_data(code: str) -> Optional[dict]:
         return None
     if code in catalog.FIAT:
         name, _, tg_id, fx_sym = catalog.FIAT[code]
-        # ۱) Kifpool — واقعی‌ترین قیمت بازار آزاد (۳ ارز اصلی)
-        kp = kifpool.get_price(code)
-        if kp:
-            return {
-                "name": name, "price": kp["price"], "change_pct": None,
-                "change_abs": None,
-                "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
-                "unit": "تومان", "source": "Kifpool (بازار آزاد)",
-            }
-        # ۲) Alanchand — بازار آزاد (خرید/فروش صرافی)
-        al = alanchand.get_price(code)
-        if al:
-            return {
-                "name": name, "price": al["sell"], "change_pct": None,
-                "change_abs": None,
-                "buy": al["buy"], "sell": al["sell"],
-                "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
-                "unit": "تومان", "source": "Alanchand (بازار روز)",
-            }
-        # ۳) Wallex + Binance (لایو ۳ثانیه + ۰.۵٪ سود بازار)
+        # Wallex لایو (۳ثانیه) + ۰.۵٪ سود بازار — قیمت اصلی
         usdt_t = usdt_toman()
-        # ۰.۵٪ سود بازار آزاد
         if usdt_t:
             usdt_t = round(usdt_t * 1.005)
         price = None
@@ -285,7 +263,7 @@ def get_banner_data(code: str) -> Optional[dict]:
             "name": name, "price": price, "change_pct": pct,
             "change_abs": None,
             "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
-            "unit": "تومان", "source": "Wallex+Binance (لایو)",
+            "unit": "تومان", "source": "Wallex+Binance (لایو +۰.۵٪)",
         }
 
     if code in catalog.GOLD:
