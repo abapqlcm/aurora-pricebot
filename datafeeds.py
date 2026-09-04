@@ -135,8 +135,32 @@ def binance_24h_change(symbol: str) -> Optional[float]:
 
 # ---------------- Wallex (بازار آزاد ایران — لایو) ----------------
 
+def _wallex_otc(side: str = "SELL") -> Optional[float]:
+    """قیمت لحظهای OTC والکس — همون قیمتی که wallex.ir نشون میده (TTL 5s).
+    SELL = قیمت فروش به کاربر (۲۱۷k الان)، BUY = خرید از کاربر.
+    برای دلار/تتر از SELL استفاده میکنیم چون wallex.ir هم SELL نشون میده."""
+    def fetch():
+        try:
+            r = _get(f"https://api.wallex.ir/v1/otc/price?symbol=USDTTMN&side={side}", timeout=8)
+            j = r.json()
+            p = j.get("result", {}).get("price")
+            return float(p) if p else None
+        except Exception as e:
+            log.warning("wallex otc %s: %s", side, e)
+            return None
+    # کش جدا با TTL کوتاه — نمیخوایم با markets قاطی شه
+    now = time.time()
+    key = f"wallex_otc_{side}"
+    hit = _cache.get(key)
+    if hit and now - hit[0] < 5:  # ۵ ثانیه لایو
+        return hit[1]
+    v = fetch()
+    if v:
+        _cache[key] = (now, v)
+    return v
+
 def _wallex_markets() -> dict:
-    """نمادهای والکس — کش ۲۰ ثانیه‌ای (لایو ولی نه هر ثانیه)."""
+    """نمادهای والکس — کش ۵ ثانیهای (لایو)."""
     def fetch():
         r = _get("https://api.wallex.ir/v1/markets", timeout=12)
         return r.json().get("result", {}).get("symbols", {})
@@ -163,7 +187,11 @@ def wallex_quote(symbol: str) -> Tuple[Optional[float], Optional[float], Optiona
 
 
 def usdt_toman() -> float:
-    """قیمت لحظه‌ای تتر تومانی (بازار آزاد = نرخ واقعی دلار)."""
+    """قیمت لحظهای تتر تومانی — OTC والکس (همون قیمت سایت wallex.ir، لایو ۵ثانیه).
+    fallback: markets lastPrice اگر OTC در دسترس نبود."""
+    p = _wallex_otc("SELL")
+    if p:
+        return p
     last, _, _ = wallex_quote("USDTTMN")
     return last or 0.0
 
@@ -218,8 +246,14 @@ def fx_to_usd(ccy: str) -> Optional[float]:
 
 # ---------------- واحد یکپارچه ----------------
 
-# کد داخلی → کد ISO واقعی برای er-api — نگه داشته شد (فعلاً استفاده نمیشه، ولی بمونه)
-_FIAT_ISO = {"dollar": "USD", "euro": "EUR", "pound": "GBP"}
+# کد داخلی → کد ISO واقعی برای er-api
+_FIAT_ISO = {
+    "dollar": "USD", "euro": "EUR", "pound": "GBP",
+    "aed": "AED", "try": "TRY", "chf": "CHF", "cad": "CAD", "aud": "AUD",
+    "cny": "CNY", "jpy": "JPY", "rub": "RUB", "kwd": "KWD", "sar": "SAR",
+    "omr": "OMR", "qar": "QAR", "bhd": "BHD", "inr": "INR", "pkr": "PKR",
+    "myr": "MYR", "iqd": "IQD",
+}
 
 
 def get_banner_data(code: str) -> Optional[dict]:
@@ -232,7 +266,7 @@ def get_banner_data(code: str) -> Optional[dict]:
         return None
     if code in catalog.FIAT:
         name, _, tg_id, fx_sym = catalog.FIAT[code]
-        # Wallex لایو (۳ثانیه) + ۰.۵٪ سود بازار — قیمت اصلی
+        # Wallex لایو OTC (۵ثانیه — همون wallex.ir) + ۰.۵٪ سود بازار — قیمت اصلی
         usdt_t = usdt_toman()
         if usdt_t:
             usdt_t = round(usdt_t * 1.005)
@@ -245,8 +279,15 @@ def get_banner_data(code: str) -> Optional[dict]:
             rate = binance_fx_rate(fx_sym)
             if usdt_t and rate:
                 price = round(usdt_t * rate)
+            else:
+                # بایننس جفت نداشت → er-api
+                iso = _FIAT_ISO.get(code)
+                v = fx_to_usd(iso) if iso else None
+                if usdt_t and v:
+                    price = round(usdt_t * v)
         else:
-            v = fx_to_usd(code)
+            iso = _FIAT_ISO.get(code)
+            v = fx_to_usd(iso) if iso else None
             if usdt_t and v:
                 price = round(usdt_t * v)
         if price is None:
@@ -279,16 +320,18 @@ def get_banner_data(code: str) -> Optional[dict]:
 
     if code in catalog.STABLE:
         name, tg_id, _ = catalog.STABLE[code]
-        # تتر داخلی = USDTTMN والکس (لایو) — از quote کشدار استفاده کن (بدون fetch دوم)
-        last, ch, high_w = wallex_quote("USDTTMN")
+        # تتر = OTC والکس لایو (۵s — همون wallex.ir) + ۰.۵٪ سود مثل دلار
+        otc = usdt_toman()  # همین الان OTC لایو (خام ۲۱۷k)
+        last = round(otc * 1.005) if otc else None  # با سود مثل دلار
+        _, ch, high_w = wallex_quote("USDTTMN")
         if last:
             # از همان quote کشدار high/low بگیر (بدون درخواست تکراری)
             try:
                 syms = _wallex_markets()
                 usdt_data = syms.get('USDTTMN', {})
                 stats = usdt_data.get('stats', {})
-                high_24 = float(stats.get('24h_highPrice', last))
-                low_24 = float(stats.get('24h_lowPrice', last))
+                high_24 = round(float(stats.get('24h_highPrice', last)) * 1.005) if stats.get('24h_highPrice') else last
+                low_24 = round(float(stats.get('24h_lowPrice', last)) * 1.005) if stats.get('24h_lowPrice') else last
                 # fake ohlcv برای chart — ساختار [open, high, low, close] مثل بایننس
                 ohlcv = [
                     [low_24, high_24, low_24, low_24],

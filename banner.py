@@ -289,7 +289,7 @@ def render_banner_video(code: str, duration: float = 2.0, fps: int = 16) -> Opti
     import time
     now = time.time()
     hit = _MP4_CACHE.get(ck)
-    if hit and now - hit[0] < 10:
+    if hit and now - hit[0] < 5:
         val = hit[1]
         if val is None:
             # پاک کردن کش خراب برای تلاش مجدد
@@ -299,7 +299,7 @@ def render_banner_video(code: str, duration: float = 2.0, fps: int = 16) -> Opti
     with _VIDEO_LOCK:
         hit = _MP4_CACHE.get(ck)
         now = time.time()
-        if hit and now - hit[0] < 10:
+        if hit and now - hit[0] < 5:
             return hit[1]
         try:
             out = _render_video_uncached(code, ck, now, duration, fps)
