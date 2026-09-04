@@ -17,7 +17,7 @@ log = logging.getLogger("data")
 
 UA = {"User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
 _cache = {}
-CACHE_TTL = 10  # کش خیلی کوتاه — قیمت واقعاً لایو (تغییرات سریع دیده بشه)
+CACHE_TTL = 3  # کش خیلی کوتاه — قیمت واقعاً لایو (تغییرات سریع دیده بشه)
 
 
 def _get(url, timeout=12):
