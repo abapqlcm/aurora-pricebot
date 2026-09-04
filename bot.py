@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 # توکن ربات و ID مالک — مستقیماً هاردکد شده (پروژه خصوصی است)
 # اگر BOT_TOKEN در محیط ست نشده باشد، از مقدار پیش‌فرض استفاده می‌شود
-TOKEN = os.getenv("BOT_TOKEN", "***")
+TOKEN = os.getenv("BOT_TOKEN", "8998216390:AAGiUZUmMXdnwcsVsDegPOlgzPPxVafNGAw")
 
 
 async def on_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
