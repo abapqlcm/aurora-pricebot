@@ -70,17 +70,19 @@ def tgju_quote(tgju_id: str) -> Tuple[Optional[int], Optional[float], Optional[i
 _hist_cache: dict = {}
 
 def tgju_history(tgju_id: str, days: int = 14) -> List[float]:
-    """بسته‌شدن‌های روزانه از indicator API — کش 1 ساعته (روزانه‌ست، زود عوض نمی‌شه)."""
+    """بسته‌شدن‌های روزانه از indicator API — کش 1 ساعته (روزانه‌ست، زود عوض نمی‌شه).
+    خطا هم ۵ دقیقه کش می‌شه تا قطعی API باعث کندی زنجیره‌ای نشه."""
     key = f"h14_{tgju_id}"
     import time as _t
     hit = _hist_cache.get(key)
-    if hit and _t.time() - hit[0] < 3600:
+    if hit and _t.time() - hit[0] < (3600 if hit[1] else 300):
         return hit[1]
     def fetch():
         try:
             r = _get(f"https://api.tgju.org/v1/market/indicator/summary-table-data/{tgju_id}", timeout=15)
             data = r.json().get("data", [])
             if not data:
+                _hist_cache[key] = (_t.time(), [])
                 return []
             rows = data[:days]
             closes = []
@@ -94,8 +96,10 @@ def tgju_history(tgju_id: str, days: int = 14) -> List[float]:
             return v
         except Exception as e:
             log.warning("tgju history %s: %s", tgju_id, e)
+            # کش منفی ۵ دقیقه‌ای — جلوی تلاش مجدد هر ثانیه رو می‌گیره
+            _hist_cache[key] = (_t.time(), [])
             return []
-    return fetch()  # کش داخلی خودش را دارد، نیازی به _cached نیست
+    return fetch()
 
 
 # ---------------- Binance ----------------
@@ -225,48 +229,40 @@ def get_banner_data(code: str) -> Optional[dict]:
         return None
     if code in catalog.FIAT:
         name, _, tg_id, fx_sym = catalog.FIAT[code]
-        # ۱) اول بازار روز از Alanchand (خرید/فروش صرافی)
+        # ۱) قیمت لایو بازار آزاد: USDTTMN والکس × نرخ جهانی er-api (همه‌ی ارزها، یک روش)
+        usdt_t = usdt_toman()
+        v = fx_to_usd(code)  # 1 واحد ارز چند دلار (dollar → 1.0)
         al = alanchand.get_price(code)
+        if usdt_t and v:
+            price = round(usdt_t * v)
+            # چیپ خرید/فروش صرافی از Alanchand (اختیاری — فقط دکور)
+            out = {
+                "name": name, "price": price,
+                "change_pct": None, "change_abs": None,
+                "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
+                "unit": "تومان", "source": "Wallex+er-api (لایو)",
+            }
+            if al:
+                out["buy"] = al["buy"]
+                out["sell"] = al["sell"]
+            return out
+        # ۲) fallback: Alanchand (خرید/فروش صرافی) — اگه والکس/er-api نبود
         if al:
             return {
                 "name": name, "price": al["sell"], "change_pct": None,
                 "change_abs": None,
-                "buy": al["buy"], "sell": al["sell"],  # ۱۶. بازه خرید/فروش برای بنر
+                "buy": al["buy"], "sell": al["sell"],
                 "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
                 "unit": "تومان", "source": "Alanchand (بازار روز)",
             }
-        # ۲) fallback: Wallex + Binance (لایو)
-        usdt_t = usdt_toman()
-        price = None
-        pct = None
-        if code == "dollar":
-            # دلار = تتر تومانی (بازار آزاد)
-            price = round(usdt_t) if usdt_t else None
-            _, pct, _ = wallex_quote("USDTTMN")
-        elif tg_id is None:
-            # ارزهای بدون TGJU → er-api (نرخ جهانی) × تتر تومانی
-            v = fx_to_usd(code)
-            if usdt_t and v:
-                price = round(usdt_t * v)
-        elif usdt_t and fx_sym:
-            rate = binance_fx_rate(fx_sym)
-            if rate:
-                price = round(usdt_t * rate)
-        if price is None:
-            # fallback: TGJU (ممکنه کند باشه)
-            p, dp, d = tgju_quote(tg_id)
-            hist_rial = tgju_history(tg_id)
-            hist = [x / 10 for x in hist_rial]
-            return {
-                "name": name, "price": (p // 10 if p else None), "change_pct": dp,
-                "change_abs": (d // 10 if d else None),
-                "history": hist, "unit": "تومان", "source": "TGJU",
-            }
+        # ۳) fallback نهایی: TGJU (ممکنه کند باشه)
+        p, dp, d = tgju_quote(tg_id)
+        hist_rial = tgju_history(tg_id)
+        hist = [x / 10 for x in hist_rial]
         return {
-            "name": name, "price": price, "change_pct": pct,
-            "change_abs": None,
-            "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
-            "unit": "تومان", "source": "Wallex+Binance (لایو)",
+            "name": name, "price": (p // 10 if p else None), "change_pct": dp,
+            "change_abs": (d // 10 if d else None),
+            "history": hist, "unit": "تومان", "source": "TGJU",
         }
 
     if code in catalog.GOLD:
@@ -282,15 +278,13 @@ def get_banner_data(code: str) -> Optional[dict]:
 
     if code in catalog.STABLE:
         name, tg_id, _ = catalog.STABLE[code]
-        # تتر داخلی = USDTTMN والکس (لایو)
-        last, ch, _ = wallex_quote("USDTTMN")
+        # تتر داخلی = USDTTMN والکس (لایو) — از quote کشدار استفاده کن (بدون fetch دوم)
+        last, ch, high_w = wallex_quote("USDTTMN")
         if last:
-            # از Wallex 24h high/low بگیر
+            # از همان quote کشدار high/low بگیر (بدون درخواست تکراری)
             try:
-                r = _get("https://api.wallex.ir/v1/markets", timeout=8)
-                result = r.json().get('result', {})
-                symbols = result.get('symbols', {})
-                usdt_data = symbols.get('USDTTMN', {})
+                syms = _wallex_markets()
+                usdt_data = syms.get('USDTTMN', {})
                 stats = usdt_data.get('stats', {})
                 high_24 = float(stats.get('24h_highPrice', last))
                 low_24 = float(stats.get('24h_lowPrice', last))

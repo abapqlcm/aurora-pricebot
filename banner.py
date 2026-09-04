@@ -487,7 +487,12 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
             proc.stdin.close()
         except BrokenPipeError:
             pass
-        proc.wait()
+        try:
+            proc.wait(timeout=30)  # فیکس: هنگ ffmpeg رندر رو برای همیشه فریز نکنه
+        except Exception:
+            proc.kill()
+            proc.wait()
+            return None
         out = open(tmp.name, "rb").read()
     finally:
         try:

@@ -196,7 +196,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         # ۱۰. fetch+render در thread جدا — event loop بلاک نشه (سرعت)
         import asyncio
         loop = asyncio.get_running_loop()
-        
+
         if kind == "single":
             # اسم ارز تک — بنر + کپشن + دکمه‌های کارت انتقالی
             key = data
@@ -242,8 +242,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await _prefetch(ctx, ["dollar", "BTC", "gold_18", "usdt", "euro"])
 
         elif kind == "market":
-            # ۱۰. کارت «بازار امروز» — گرید چند ارز
-            loop_m = _aio.get_running_loop()
+            # ۱۰. کارت «بازار امروز» — گرید چند ارز (import _aio در همین شاخه — فیکس NameError)
+            loop_m = asyncio.get_running_loop()
             mpng = await loop_m.run_in_executor(None, banner.render_market_card)
             if mpng:
                 await update.message.reply_photo(mpng, caption="📊 <b>بازار امروز</b> — برگ برنده‌ها، طلای روز و کریپتو", parse_mode="HTML")

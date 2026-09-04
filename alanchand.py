@@ -77,7 +77,7 @@ def _fetch():
 
 
 def get_prices() -> dict:
-    """قیمت‌های بازار روز (با کش ۲۰ ثانیه)."""
+    """قیمت‌های بازار روز (با کش ۲۰ ثانیه، جایگزینی اتمیک — بدون race)."""
     now = time.time()
     if _CACHE and now - _CACHE.get("_t", 0) < _CACHE_TTL:
         return _CACHE
@@ -87,10 +87,10 @@ def get_prices() -> dict:
             data["_t"] = now
             _CACHE.clear()
             _CACHE.update(data)
-            return _CACHE
+            return dict(_CACHE)
     except Exception as e:
         log.warning("alanchand fetch error: %s", e)
-    return _CACHE
+    return dict(_CACHE)
 
 
 def get_price(code: str) -> dict:
