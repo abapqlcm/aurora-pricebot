@@ -12,6 +12,8 @@ from typing import List, Optional, Tuple
 import requests
 
 import catalog
+import kifpool
+import alanchand
 
 log = logging.getLogger("data")
 
@@ -232,11 +234,26 @@ def get_banner_data(code: str) -> Optional[dict]:
         return None
     if code in catalog.FIAT:
         name, _, tg_id, fx_sym = catalog.FIAT[code]
-        # ۱) لایو بازار آزاد: Wallex (USDTTMN = نرخ واقعی دلار) × نرخ جهانی
-        #    - دلار = خود تتر تومانی
-        #    - اگه fx_sym داشت (مثل TRYUSDT) → از Binance
-        #    - وگرنه → er-api (۱۵۰+ ارز جهانی)
-        # ۲) فالبک آخر: TGJU
+        # ۱) Kifpool — واقعی‌ترین قیمت بازار آزاد (۳ ارز اصلی)
+        kp = kifpool.get_price(code)
+        if kp:
+            return {
+                "name": name, "price": kp["price"], "change_pct": None,
+                "change_abs": None,
+                "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
+                "unit": "تومان", "source": "Kifpool (بازار آزاد)",
+            }
+        # ۲) Alanchand — بازار آزاد (خرید/فروش صرافی)
+        al = alanchand.get_price(code)
+        if al:
+            return {
+                "name": name, "price": al["sell"], "change_pct": None,
+                "change_abs": None,
+                "buy": al["buy"], "sell": al["sell"],
+                "history": ([x / 10 for x in tgju_history(tg_id)] if tg_id else []),
+                "unit": "تومان", "source": "Alanchand (بازار روز)",
+            }
+        # ۳) Wallex + Binance (لایو)
         usdt_t = usdt_toman()
         price = None
         pct = None
