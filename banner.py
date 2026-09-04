@@ -289,7 +289,7 @@ def render_banner_video(code: str, duration: float = 2.0, fps: int = 16) -> Opti
     import time
     now = time.time()
     hit = _MP4_CACHE.get(ck)
-    if hit and now - hit[0] < 60:
+    if hit and now - hit[0] < 10:
         val = hit[1]
         if val is None:
             # پاک کردن کش خراب برای تلاش مجدد
@@ -299,7 +299,7 @@ def render_banner_video(code: str, duration: float = 2.0, fps: int = 16) -> Opti
     with _VIDEO_LOCK:
         hit = _MP4_CACHE.get(ck)
         now = time.time()
-        if hit and now - hit[0] < 60:
+        if hit and now - hit[0] < 10:
             return hit[1]
         try:
             out = _render_video_uncached(code, ck, now, duration, fps)
@@ -960,15 +960,15 @@ def render_banner(code: str) -> Optional[bytes]:
     ck = catalog.resolve(code) or code
     hit = _PNG_CACHE.get(ck)
     now = time.time()
-    # کش ۲۰ ثانیه — warm loop هر ۱۰ ثانیه رفرش می‌کنه (جواب فوری)
-    if hit and now - hit[0] < 20:
+    # کش ۵ ثانیه — هماهنگ با دیتای لایو ۳ ثانیه
+    if hit and now - hit[0] < 5:
         return hit[1]
 
     # ۱۳. فقط یه thread در آن واحد رندر کنه (double-check بعد از lock)
     with _RENDER_LOCK:
         hit = _PNG_CACHE.get(ck)
         now = time.time()
-        if hit and now - hit[0] < 20:
+        if hit and now - hit[0] < 5:
             return hit[1]
         return _render_banner_uncached(code, ck, now)
 
