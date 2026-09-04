@@ -173,6 +173,24 @@ def _wallex_otc(side: str = "SELL") -> Optional[float]:
     return v
 
 
+def wallex_buy_quote() -> Tuple[Optional[float], Optional[float]]:
+    """(قیمت خرید والکس، تغییر ۲۴h٪) — همون عدد بخش «خرید ارز» (price، لایو).
+    این قیمت خودش حاشیه والکس رو داره — بدون سود اضافه."""
+    def fetch():
+        try:
+            r = _get("https://api.wallex.ir/v1/coin-market-list?baseAsset=USDT&fields=baseAsset,quotes.TMN.price,quotes.TMN.percentChange24h", timeout=8)
+            for m in r.json().get("result", {}).get("markets", []):
+                if m.get("baseAsset") == "USDT":
+                    t = m.get("quotes", {}).get("TMN", {})
+                    p = float(t.get("price") or 0) or None
+                    ch = float(t.get("percentChange24h") or 0)
+                    return (p, ch)
+        except Exception as e:
+            log.warning("wallex buy: %s", e)
+        return (None, None)
+    return _cached("wallex_buy", fetch)
+
+
 def wallex_index_high_low() -> Tuple[Optional[float], Optional[float]]:
     """سقف/کف ۲۴ ساعته‌ی شاخص OTC والکس — کاملا خام (بدون سود ۰.۵٪).
     منبع رسمی: quotes.TMN.dailyHighPrice / dailyLowPrice از coin-market-list."""
@@ -351,15 +369,14 @@ def get_banner_data(code: str) -> Optional[dict]:
 
     if code in catalog.STABLE:
         name, tg_id, _ = catalog.STABLE[code]
-        # تتر = شاخص OTC والکس (wPrice لایو — همون بخش خرید) + ۰.۵٪ سود مثل دلار
-        otc = usdt_toman()  # wPrice خام لایو (۲۱۶k)
-        last = round(otc * 1.005) if otc else None  # قیمت نمایشی با سود
-        _, ch, high_w = wallex_quote("USDTTMN")
-        # های/لو ۲۴h از شاخص رسمی والکس — کاملا خام بدون سود (کپشن)
+        # تتر = قیمت «خرید ارز» والکس (price — لایو، همون عددی که کاربر تو بخش خرید میبینه)
+        # + شاخص wPrice و های/لو ۲۴h خام برای کپشن
+        buy_p, ch = wallex_buy_quote()      # قیمت خرید لایو (۲۱۸k) — بدون سود اضافه
+        otc = usdt_toman()                  # شاخص wPrice خام (۲۱۶k)
         hi_i, lo_i = wallex_index_high_low()
+        last = round(buy_p) if buy_p else None
         if last and hi_i and lo_i:
-            high_24, low_24 = round(hi_i), round(lo_i)
-            # fake ohlcv برای chart — [open, high, low, close] مثل بایننس
+            high_24, low_24 = round(hi_i), round(lo_i)  # خام — بدون سود
             ohlcv = [
                 [low_24, high_24, low_24, low_24],
                 [low_24, high_24, low_24, last],
@@ -369,9 +386,10 @@ def get_banner_data(code: str) -> Optional[dict]:
                 "name": name, "price": last, "change_pct": ch,
                 "change_abs": None,
                 "high_24": high_24, "low_24": low_24,
+                "index_price": otc,  # شاخص wPrice — برای کپشن (تفاوت با خرید)
                 "history": [x / 10 for x in tgju_history(tg_id)],
                 "ohlcv": ohlcv,
-                "unit": "تومان", "source": "Wallex OTC (لایو) +۰.۵٪",
+                "unit": "تومان", "source": "Wallex خرید (لایو)",
             }
         if last:
             # از همان quote کشدار high/low بگیر (بدون درخواست تکراری)

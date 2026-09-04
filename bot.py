@@ -410,9 +410,14 @@ def _caption_for(key: str, d: dict | None, price_override=None, toman: float | N
         ohlcv = d.get("ohlcv", [])
         high_24 = max(x[1] for x in ohlcv) if ohlcv else price
         low_24 = min(x[2] for x in ohlcv) if ohlcv else price
+        # شاخص OTC والکس (wPrice) — تفاوتش با قیمت خرید نشون داده شه
+        idx = d.get("index_price")
+        idx_line = ""
+        if idx:
+            idx_line = f"\n📊 شاخص: {render.fmt_num(int(round(idx)))} تومان"
         return (
             f"⭐️ 1 {d['name']} = <b>{render.fmt_num(int(price))}</b>\n"
-            f"<b>{pct:+.2f}%</b>\n"
+            f"<b>{pct:+.2f}%</b>{idx_line}\n"
             f"\n📊 <b>24H High & Low:</b>\n"
             f"<blockquote>🔼 High: {render.fmt_num(int(high_24))}\n"
             f"🔽 Low: {render.fmt_num(int(low_24))}</blockquote>\n"
