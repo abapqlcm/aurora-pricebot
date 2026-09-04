@@ -152,7 +152,7 @@ def _wallex_otc(side: str = "SELL") -> Optional[float]:
     now = time.time()
     key = f"wallex_otc_{side}"
     hit = _cache.get(key)
-    if hit and now - hit[0] < 5:  # ۵ ثانیه لایو
+    if hit and now - hit[0] < 3:  # ۳ ثانیه — کوچکترین نوسان هم دیده شه
         return hit[1]
     v = fetch()
     if v:
