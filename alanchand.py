@@ -11,7 +11,7 @@ import requests
 log = logging.getLogger(__name__)
 
 _CACHE = {}
-_CACHE_TTL = 20  # ثانیه
+_CACHE_TTL = 3  # ثانیه — هماهنگ با کش اصلی برای قیمت لایو
 
 # نقشه نام‌های سایت → کدهای ربات
 NAME_TO_CODE = {
@@ -76,7 +76,7 @@ def _fetch():
 
 
 def get_prices() -> dict:
-    """قیمت‌های بازار روز (با کش ۲۰ ثانیه)."""
+    """قیمتهای بازار روز (با کش ۳ ثانیه)."""
     now = time.time()
     if _CACHE and now - _CACHE.get("_t", 0) < _CACHE_TTL:
         return _CACHE

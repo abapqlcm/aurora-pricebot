@@ -10,7 +10,7 @@ import requests
 log = logging.getLogger(__name__)
 
 _CACHE = {}
-_CACHE_TTL = 20  # ثانیه
+_CACHE_TTL = 3  # ثانیه — هماهنگ با کش اصلی برای قیمت لایو
 
 NAME_TO_CODE = {
     "دلار آمریکا": "dollar",
