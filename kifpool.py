@@ -29,11 +29,15 @@ def _fetch():
                      headers={"User-Agent": "Mozilla/5.0"})
     html = r.text
     result = {}
-    # هر ارز داخل یک chunk با کلاس p-2 flex هست
+    # هر ارز داخل یک chunk با کلاس p-2 flex هست — فقط همون chunk رو match کن
+    # chunk آخر متن صفحه رو هم داره ("دلار" تو متن مقاله) پس باید دقیق عنوان ارز رو پیدا کنیم
     chunks = html.split("p-2 flex")
     for chunk in chunks[1:]:
+        # عنوان ارز داخل chunk دقیقاً بعد از کلاس border هست، قبل از قیمت
+        # پس فقط 500 کاراکتر اول chunk که هدره رو چک کن
+        header = chunk[:600]
         for fa_name, code in NAME_TO_CODE.items():
-            if fa_name in chunk:
+            if fa_name in header:
                 m = re.search(r'<span class="inline-block">([\d,۰-۹]+)</span><span>تومان', chunk)
                 if m:
                     val = _to_en(m.group(1))
