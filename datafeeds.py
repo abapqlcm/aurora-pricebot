@@ -315,14 +315,14 @@ def get_banner_data(code: str) -> Optional[dict]:
         return None
     if code in catalog.FIAT:
         name, _, tg_id, fx_sym = catalog.FIAT[code]
-        # Wallex لایو OTC (۵ثانیه — همون wallex.ir) + ۰.۵٪ سود بازار — قیمت اصلی
-        usdt_t = usdt_toman()
-        if usdt_t:
-            usdt_t = round(usdt_t * 1.005)
+        # دلار = قیمت «خرید ارز» والکس (price لایو — همون که تو بخش خرید میبینی)
+        # بقیه ارزها = قیمت خرید × نرخ جهانی + ۰.۵٪ سود بازار
+        buy_p, _ = wallex_buy_quote()  # price لایو والکس (۲۱۸k)
+        usdt_t = round(buy_p * 1.005) if buy_p else None  # فقط برای ارزهای غیردلاری
         price = None
         pct = None
         if code == "dollar":
-            price = round(usdt_t) if usdt_t else None
+            price = round(buy_p) if buy_p else None  # خام خرید — مثل تتر
             _, pct, _ = wallex_quote("USDTTMN")
         elif fx_sym:
             rate = binance_fx_rate(fx_sym)
