@@ -289,33 +289,32 @@ def render_banner_video(code: str, duration: float = 2.0, fps: int = 16) -> Opti
     import time
     now = time.time()
     hit = _MP4_CACHE.get(ck)
-    if hit and now - hit[0] < 5:
+    if hit and now - hit[0] < 3:
         val = hit[1]
         if val is None:
-            # پاک کردن کش خراب برای تلاش مجدد
             del _MP4_CACHE[ck]
         else:
             return val
     with _VIDEO_LOCK:
         hit = _MP4_CACHE.get(ck)
         now = time.time()
-        if hit and now - hit[0] < 5:
+        if hit and now - hit[0] < 3:
             return hit[1]
         try:
-            out = _render_video_uncached(code, ck, now, duration, fps)
-            if out:
-                # ثبت قیمتِ همون لحظه‌ی رندر (برای کپشن مچ)
-                d = datafeeds.get_banner_data(code)
-                if d:
-                    _LAST_VIDEO_PRICE[ck] = d.get("price")
+            # Fetch data once, pass to renderer (avoids duplicate HTTP call)
+            data = datafeeds.get_banner_data(code)
+            out = _render_video_uncached(code, ck, now, duration, fps, prefetched_data=data)
+            if out and data:
+                _LAST_VIDEO_PRICE[ck] = data.get("price")
             return out
         except Exception as e:
             log.warning("video render %s: %s", code, e)
             return None
 
 
-def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps: int) -> Optional[bytes]:
-    data = datafeeds.get_banner_data(code)
+def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps: int, prefetched_data: dict | None = None) -> Optional[bytes]:
+    # FIX: use prefetched data if available to avoid duplicate HTTP call
+    data = prefetched_data if prefetched_data is not None else datafeeds.get_banner_data(code)
     if not data or not data.get("price"):
         return None
     hist = data.get("history") or []
@@ -333,7 +332,9 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
 
     # پس‌زمینه‌ی بنر **بدون نمودار** (خط static قدیمی حذف) — خط انیمیشنی تنها خطه
     # omit_price=True → قیمت هر فریم با roll-up کشیده می‌شه (ایده ۲) نه در پس‌زمینه
-    _bkey = (ck, data.get("price"), (data.get("change_pct") or 0).__round__(2))
+    # FIX: base cache key only by code+type (not price/pct) — base image is static per asset
+    # Price/chart overlay happens per-frame anyway via rollup_digits + chart drawing
+    _bkey = (ck, _asset_type(code))
     _bhit = _VIDEO_BASE_CACHE.get(_bkey)
     if _bhit is not None:
         base_img = _bhit.copy()
@@ -342,8 +343,11 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
         if not base_png:
             return None
         base_img = Image.open(io.BytesIO(base_png)).convert("RGB")
-        if len(_VIDEO_BASE_CACHE) > 6:
-            _VIDEO_BASE_CACHE.clear()
+        if len(_VIDEO_BASE_CACHE) > 12:
+            # Evict oldest entries instead of clearing all
+            keys_to_remove = list(_VIDEO_BASE_CACHE.keys())[:len(_VIDEO_BASE_CACHE) - 12]
+            for k in keys_to_remove:
+                del _VIDEO_BASE_CACHE[k]
         _VIDEO_BASE_CACHE[_bkey] = base_img.copy()
     Wv, Hv = base_img.size
 
@@ -398,7 +402,7 @@ def _render_video_uncached(code: str, ck: str, now: float, duration: float, fps:
             [_FF, "-y", "-threads", "1", "-f", "rawvideo", "-vcodec", "rawvideo",
              "-s", f"{w}x{h}",
              "-pix_fmt", "rgb24", "-r", str(fps), "-i", "-",
-             "-an", "-vcodec", "libx264", "-preset", "veryfast", "-threads", "1",
+             "-an", "-vcodec", "libx264", "-preset", "ultrafast", "-tune", "animation", "-threads", "1",
              "-pix_fmt", "yuv420p",
              "-movflags", "+faststart", "-crf", "23", tmp.name],
             stdin=_sp.PIPE, stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)

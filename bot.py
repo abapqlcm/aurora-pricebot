@@ -129,25 +129,26 @@ _warm_lock = threading.Lock()
 
 
 async def _warm_loop(ctx: ContextTypes.DEFAULT_TYPE):
-    """هر ۱۰ ثانیه ارزهای محبوب رو از قبل رندر می‌کنه — جواب کاربر همیشه <1s.
-    با lock + stagger: هر بار فقط یه key، بدون فشار به APIها."""
+    """هر ۴ ثانیه ۳ ارز محبوب رو موازی رندر می‌کنه — دوره کامل ۱۵s بجای ۴۴s.
+    بدون فشار به APIها (datafeeds خودش کش ۳s داره)."""
     import asyncio
     idx = 0
+    batch_size = 3
     while True:
         try:
-            k = HOT_KEYS[idx % len(HOT_KEYS)]
-            idx += 1
+            batch = [HOT_KEYS[(idx + i) % len(HOT_KEYS)] for i in range(batch_size)]
+            idx += batch_size
 
-            def _job(key=k):
-                try:
-                    datafeeds.get_banner_data(key)
-                    banner.render_banner(key)
-                    # ۲۸. ویدیو/انیمیشن هم گرم کن — جواب دکمه/بنر = آنی
-                    banner.render_banner_video(key)
-                except Exception:
-                    pass
+            def _job(keys):
+                for key in keys:
+                    try:
+                        datafeeds.get_banner_data(key)
+                        banner.render_banner(key)
+                        banner.render_banner_video(key)
+                    except Exception:
+                        pass
 
-            await asyncio.get_running_loop().run_in_executor(None, _job)
+            await asyncio.get_running_loop().run_in_executor(None, _job, batch)
         except Exception as e:
             log.warning("warm loop: %s", e)
         await asyncio.sleep(4)
